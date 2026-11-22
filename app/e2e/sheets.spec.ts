@@ -256,3 +256,21 @@ test("if the preview worker fails to load, a note says so and page numbers stay"
   await expect(page.locator("[data-testid=placement-image][href]")).toHaveCount(0);
   expect(errors).toEqual([]);
 });
+
+test("a sheet with more than 64 pages keeps every page's thumbnail live", async ({ page }) => {
+  // 10 folio signatures on a 2400 pt square sheet: all 20 pieces, all 76 pages, on one sheet.
+  const errors = await openSetup(page);
+  await page.getByTestId("sheet-size").selectOption("custom");
+  await page.getByTestId("sheet-width").fill("2400");
+  await page.getByTestId("sheet-height").fill("2400");
+  await page.getByTestId("start").click();
+  await expect(stepper(page)).toContainText("Sheet 1 of 1");
+  const images = page.locator("[data-testid=placement-image]");
+  await expect(images).toHaveCount(76);
+  await expect(page.locator("[data-testid=placement-image][href^='blob:']")).toHaveCount(76, { timeout: 30_000 });
+  // A revoked blob URL can no longer be fetched.
+  const live = await images.evaluateAll((all) =>
+    Promise.all(all.map((image) => fetch(image.getAttribute("href")!).then((r) => r.ok, () => false))));
+  expect(live.filter((ok) => !ok)).toHaveLength(0);
+  expect(errors).toEqual([]);
+});

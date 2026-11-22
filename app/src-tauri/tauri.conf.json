@@ -11,7 +11,9 @@
       {
         "title": "bookcomposer",
         "width": 1280,
-        "height": 800
+        "height": 800,
+        "minWidth": 1100,
+        "minHeight": 700
       }
     ]
   },

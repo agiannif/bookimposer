@@ -29,38 +29,40 @@
   }
 </script>
 
+<!-- Sits in the header; its result shows as a dismissible notice just below the button. -->
 <div class="bar">
-<div class="export">
-  <button type="button" class="primary" disabled={ws.hasErrors || busy} onclick={exportPdf} data-testid="export-pdf">Export PDF</button>
   {#if busy}<span class="hint" role="status" data-testid="export-busy">Exporting…</span>{/if}
-</div>
+  <button type="button" class="primary" disabled={ws.hasErrors || busy} onclick={exportPdf} data-testid="export-pdf">Export PDF</button>
 
-{#if error || warnings.length}
-  <div class="notice" class:failed={error} role={error ? "alert" : "status"}>
-    {#if error}
-      <p data-testid="export-error">{error}</p>
-    {:else}
-      <ul>
-        {#each warnings as warning}<li data-testid="export-warning">{warning}</li>{/each}
-      </ul>
-    {/if}
-    <button type="button" aria-label="Dismiss" onclick={() => ((error = null), (warnings = []))} data-testid="dismiss-export">×</button>
-  </div>
-{/if}
+  {#if error || warnings.length}
+    <div class="notice" class:failed={error} role={error ? "alert" : "status"}>
+      {#if error}
+        <p data-testid="export-error">{error}</p>
+      {:else}
+        <ul>
+          {#each warnings as warning}<li data-testid="export-warning">{warning}</li>{/each}
+        </ul>
+      {/if}
+      <button type="button" aria-label="Dismiss export messages" onclick={() => ((error = null), (warnings = []))} data-testid="dismiss-export">×</button>
+    </div>
+  {/if}
 </div>
 
 <style>
   .bar {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-  }
-  .export {
+    position: relative;
     display: flex;
     align-items: center;
     gap: var(--space-2);
   }
   .notice {
+    position: absolute;
+    top: calc(100% + var(--space-2));
+    right: 0;
+    z-index: 1;
+    width: max-content;
+    max-width: 480px;
+    box-shadow: 0 4px 16px rgb(0 0 0 / 0.12);
     display: flex;
     justify-content: space-between;
     align-items: flex-start;

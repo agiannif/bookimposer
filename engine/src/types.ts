@@ -7,8 +7,11 @@ export type FoldCount = 1 | 2 | 3
 export type PartSpec = { type: 'body'; signatures: number; folds: FoldCount } | { type: 'board' }
 // pageSizes.length is the PDF page count; each entry is that page's TrimBox (or MediaBox) size.
 export interface BookSpec { pageSizes: Size[]; parts: PartSpec[]; print: PrintSettings; mismatch: MismatchPolicy }
+// 'too-many-signatures': some signature would be entirely blank. data.maxSignatures is the most
+// that can hold content; every count above it fails, and so do a few below it, since all
+// signatures are one size.
 export type IssueCode = 'no-body' | 'multiple-bodies' | 'invalid-signatures' | 'no-body-pages'
-  | 'empty-signatures' | 'piece-does-not-fit' | 'spacing-reduces-fit' | 'page-size-mismatch'
+  | 'too-many-signatures' | 'piece-does-not-fit' | 'spacing-reduces-fit' | 'page-size-mismatch'
   | 'invalid-page-size' | 'invalid-print-settings'
 export interface Issue { code: IssueCode; severity: 'error' | 'warning'; message: string; data?: Record<string, number | number[]> }
 export interface PartAllocation { partIndex: number; type: 'body' | 'board'; pdfPages: (number | null)[] }

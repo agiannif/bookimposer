@@ -12,11 +12,12 @@ export function encodePng(bitmap: ImageBitmap): Promise<Blob> {
 
 /**
  * One blob URL per bitmap, keeping the `maxUrls` most recently used and revoking the rest.
- * A sheet shows at most a few dozen pages, so the default keeps every visible URL alive.
+ * A big sheet can show more pages than that, so the view raises the cap with `keepAtLeast`.
  */
 export class BitmapUrls {
   #encode: (bitmap: ImageBitmap) => Promise<Blob>;
   #maxUrls: number;
+  #keep = 0;
   /** Map order is recency order: the first key is the least recently used. */
   #urls = new Map<ImageBitmap, Promise<string>>();
 
@@ -36,11 +37,19 @@ export class BitmapUrls {
     }
     this.#urls.set(bitmap, url);
     for (const [oldest, evicted] of this.#urls) {
-      if (this.#urls.size <= this.#maxUrls) break;
+      if (this.#urls.size <= Math.max(this.#maxUrls, this.#keep)) break;
       this.#urls.delete(oldest);
       evicted.then((u) => URL.revokeObjectURL(u), () => {});
     }
     return url;
+  }
+
+  /**
+   * Keeps at least the `count` most recently used URLs alive. The view passes how many pages are on
+   * screen before asking for their URLs, so none of them is revoked while it shows.
+   */
+  keepAtLeast(count: number): void {
+    this.#keep = count;
   }
 
   /** Revokes every URL, when the view that shows them goes away. */

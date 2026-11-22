@@ -5,6 +5,9 @@
 //   open-project     the start screen's button for opening a project file
 //   choose-pdf       the PDF input shown after a project is opened
 //   project-error    the start screen's message for an unreadable project
+//   open-error       the start screen's message for a PDF that could not be opened
+//   cancel-project   the button that drops an opened project and goes back to the start
+//   save-error       the workspace's message for a project that could not be saved
 //   project-warning  one warning about the chosen PDF differing from the saved one
 //   dismiss-warnings the workspace's button that hides those warnings
 import { test, expect, type Page } from "@playwright/test";
@@ -48,7 +51,7 @@ test("a saved project reopens with the same PDF into the workspace without warni
   expect(errors).toEqual([]);
 });
 
-test("choosing a different PDF shows both warnings, which can be dismissed", async ({ page }) => {
+test("choosing a different PDF shows both warnings, which can be dismissed, and lays out what it can", async ({ page }) => {
   const errors = await openWithBoards(page);
   const path = await saveProject(page);
 
@@ -60,6 +63,14 @@ test("choosing a different PDF shows both warnings, which can be dismissed", asy
     "This PDF is different from the one saved with the project",
     "It has 74 pages, the project expects 76",
   ]);
+  // The saved settings still lay out: 70 body pages in 9 signatures of 8 pad 2 blanks, which the
+  // engine doesn't flag, so there is no issue banner and export stays on.
+  await expect(page.getByTestId("signatures")).toHaveValue("9");
+  await expect(page.getByTestId("allocation-segment")).toContainText(["1–2", "3–72", "73–74"]);
+  await expect(page.getByTestId("allocation-segment").nth(1)).toContainText("+2 blank");
+  await expect(page.getByTestId("derived-blanks-added")).toHaveText("2");
+  await expect(page.locator("[data-testid=issue-error], [data-testid=issue-warning]")).toHaveCount(0);
+  await expect(page.getByTestId("export-pdf")).toBeEnabled();
   await page.getByTestId("dismiss-warnings").click();
   await expect(page.getByTestId("project-warning")).toHaveCount(0);
   expect(errors).toEqual([]);
@@ -70,4 +81,36 @@ test("an unreadable project shows its error and stays on the start screen", asyn
   await openProject(page, fixture("README.md"));
   await expect(page.getByTestId("project-error")).toContainText("not valid JSON");
   await expect(page.getByTestId("open-pdf")).toBeAttached();
+});
+
+test("Cancel on the choose-PDF screen goes back to the start and clears an open error", async ({ page }) => {
+  const errors = await openWithBoards(page);
+  const path = await saveProject(page);
+  await page.goto("/");
+  await openProject(page, path);
+  // A file that isn't a PDF fails to open, and its error shows under the choose-PDF button.
+  await page.getByTestId("choose-pdf").setInputFiles(fixture("README.md"));
+  await expect(page.getByTestId("open-error")).toContainText("Could not open README.md");
+  await page.getByTestId("cancel-project").click();
+  await expect(page.getByTestId("open-pdf")).toBeAttached();
+  await expect(page.getByTestId("open-error")).toHaveCount(0);
+  // The failed page-sizes request is the only console message the browser logs for it.
+  expect(errors.filter((e) => !/Failed to load resource.*422/.test(e))).toEqual([]);
+});
+
+test("a project that can't be saved shows why and the workspace stays usable", async ({ page }) => {
+  // The browser build saves by downloading a blob URL; make that fail for the project's JSON.
+  await page.addInitScript(() => {
+    const create = URL.createObjectURL;
+    URL.createObjectURL = (object: Blob | MediaSource) => {
+      if (object instanceof Blob && object.type === "application/json") throw new Error("disk full");
+      return create(object);
+    };
+  });
+  const errors = await openWithBoards(page);
+  await page.getByTestId("save-project").click();
+  await expect(page.getByTestId("save-error")).toHaveText("Could not save the project: disk full");
+  await page.getByTestId("signatures").fill("18");
+  await expect(page.getByTestId("derived-pages-per-signature")).toHaveText("4");
+  expect(errors).toEqual([]);
 });

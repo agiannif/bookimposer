@@ -23,6 +23,32 @@ export function sheetTransform(sheet: Size, box: { width: number; height: number
   };
 }
 
+/** `box` shrunk to the sheet it fits plus the padding, so a caption above it sits by the sheet. */
+export function fittedStage(sheet: Size, box: { width: number; height: number }): { width: number; height: number } {
+  const { scale } = sheetTransform(sheet, box);
+  if (scale === 0) return box;
+  return { width: sheet.width * scale + 2 * PADDING, height: sheet.height * scale + 2 * PADDING };
+}
+
+/**
+ * How to show a sheet's front and back in `area` (CSS pixels): side by side or stacked, whichever
+ * shows the sheet larger, and the stage each side gets. `gap` separates the sides; `caption` is the
+ * height above each stage taken by its label.
+ */
+export function sidesLayout(
+  sheet: Size,
+  area: { width: number; height: number },
+  gap: number,
+  caption: number,
+): { direction: "row" | "column"; stage: { width: number; height: number } } {
+  const box = (width: number, height: number) => ({ width: Math.max(0, width), height: Math.max(0, height) });
+  const row = box((area.width - gap) / 2, area.height - caption);
+  const column = box(area.width, (area.height - gap) / 2 - caption);
+  return sheetTransform(sheet, column).scale > sheetTransform(sheet, row).scale
+    ? { direction: "column", stage: column }
+    : { direction: "row", stage: row };
+}
+
 function mapRect(r: Rect, t: SheetTransform): Rect {
   return { x: t.offsetX + t.scale * r.x, y: t.offsetY + t.scale * r.y, width: t.scale * r.width, height: t.scale * r.height };
 }

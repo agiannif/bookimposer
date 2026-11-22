@@ -74,3 +74,10 @@ test('allocation errors return an empty layout', () => {
   assert.deepEqual(layout.fillers, { count: 0, size: { width: 0, height: 0 } })
   assert.equal(layout.issues[0].code, 'no-body')
 })
+
+test('too many signatures empties the layout like any error', () => {
+  const layout = impose(workedExample({ parts: [{ type: 'board' }, { type: 'body', signatures: 9_000_000_000, folds: 1 }, { type: 'board' }] }))
+  assert.equal(layout.issues[0]?.code, 'too-many-signatures')
+  assert.deepEqual(layout.sheets, [])
+  assert.deepEqual(layout.perSheet, [])
+})

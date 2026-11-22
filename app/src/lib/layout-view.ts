@@ -56,3 +56,13 @@ export function derivedNumbers(layout: Layout): DerivedNumbers {
     blanksAdded: layout.body?.blanksAdded ?? null,
   };
 }
+
+const points = (n: number) => String(Math.round(n * 100) / 100);
+
+/** What to cut for the boards' fillers, from Layout.fillers; null when the book has no boards. */
+export function fillerNote(layout: Layout): string | null {
+  const { count, size } = layout.fillers;
+  if (count === 0) return null;
+  const pieces = count === 1 ? "1 blank piece" : `${count} blank pieces`;
+  return `Cut ${pieces} of ${points(size.width)} × ${points(size.height)} pt for the board filler${count === 1 ? "" : "s"}`;
+}

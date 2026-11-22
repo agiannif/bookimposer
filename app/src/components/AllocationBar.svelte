@@ -4,7 +4,7 @@
   let { segments }: { segments: AllocationSegment[] } = $props();
 </script>
 
-<div class="bar" aria-label="PDF pages per part">
+<div class="bar" role="group" aria-label="PDF pages per part">
   {#each segments as segment, i (i)}
     <div class={["segment", segment.kind === "body" ? "body" : "board"]} style:flex-grow={segment.pages} data-testid="allocation-segment">
       <span class="name">{segment.name}</span>

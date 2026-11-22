@@ -13,8 +13,8 @@ test("a failed export shows the exporter's message and the workspace stays usabl
   await page.getByTestId("margin").fill("20");
   await expect(page.getByTestId("margin")).toHaveValue("20");
   await expect(page.getByTestId("allocation-segment")).toContainText(["1–2", "3–74", "75–76"]);
-  await page.getByTestId("dismiss-export").click();
+  await page.getByRole("button", { name: "Dismiss export messages" }).click();
   await expect(page.getByTestId("export-error")).toHaveCount(0);
   // The failed request is the only console message the browser logs for it.
-  expect(errors.filter((e) => !e.includes("422"))).toEqual([]);
+  expect(errors.filter((e) => !/Failed to load resource.*422/.test(e))).toEqual([]);
 });

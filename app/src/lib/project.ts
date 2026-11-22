@@ -1,3 +1,4 @@
+import { SHEET_SIZES, type SheetName } from "../../../engine/src/index.ts";
 import type { BookSettings } from "./book.ts";
 
 export interface ProjectFile {
@@ -56,8 +57,8 @@ function oneOf<T>(o: Record<string, unknown>, key: string, path: string, allowed
 
 function sheet(o: Record<string, unknown>, path: string): BookSettings["print"]["sheet"] {
   const v = o.sheet;
-  if (v === "letter" || v === "a4") return v;
-  if (typeof v !== "object" || v === null || Array.isArray(v)) fail(`${path}.sheet`, "letter, a4 or { width, height }");
+  if (typeof v === "string" && Object.hasOwn(SHEET_SIZES, v)) return v as SheetName;
+  if (typeof v !== "object" || v === null || Array.isArray(v)) fail(`${path}.sheet`, `${Object.keys(SHEET_SIZES).join(", ")} or { width, height }`);
   const size = v as Record<string, unknown>;
   return { width: number(size, "width", `${path}.sheet`, "> 0"), height: number(size, "height", `${path}.sheet`, "> 0") };
 }

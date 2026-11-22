@@ -64,14 +64,15 @@ test("rejects bad settings, naming the field path", () => {
 });
 
 test("rejects bad sheet values", () => {
-  assert.match(errorOf(withSettings((s) => (s.print.sheet = "legal"))), /settings\.print\.sheet/);
+  assert.match(errorOf(withSettings((s) => (s.print.sheet = "legal"))), /settings\.print\.sheet must be letter, a4, tabloid, a3 or \{ width, height \}/);
+  assert.match(errorOf(withSettings((s) => (s.print.sheet = "constructor"))), /settings\.print\.sheet/);
   assert.match(errorOf(withSettings((s) => (s.print.sheet = { width: 0, height: 5 }))), /settings\.print\.sheet\.width/);
   assert.match(errorOf(withSettings((s) => (s.print.sheet = { width: 5, height: "x" }))), /settings\.print\.sheet\.height/);
   assert.match(errorOf(withSettings((s) => (s.print.sheet = null))), /settings\.print\.sheet/);
 });
 
 test("accepts named sheets", () => {
-  for (const sheet of ["letter", "a4"]) {
+  for (const sheet of ["letter", "a4", "tabloid", "a3"]) {
     const r = parseProject(withSettings((s) => (s.print.sheet = sheet)));
     assert.equal(r.ok, true);
   }

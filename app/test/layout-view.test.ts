@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { impose } from "../../engine/src/index.ts";
 import { bookParts, DEFAULT_SETTINGS, toBookSpec, type BookSettings } from "../src/lib/book.ts";
-import { allocationSegments, derivedNumbers, pageRanges } from "../src/lib/layout-view.ts";
+import { allocationSegments, derivedNumbers, fillerNote, pageRanges } from "../src/lib/layout-view.ts";
 
 const pages = (n: number) => Array.from({ length: n }, () => ({ width: 288, height: 378 }));
 const boards: BookSettings = { ...DEFAULT_SETTINGS, frontBoard: true, backBoard: true, signatures: 9 };
@@ -33,7 +33,8 @@ test("allocationSegments shows blanks added to the body separately", () => {
 });
 
 test("allocationSegments follows the parts when a board is removed", () => {
-  const s = { ...boards, frontBoard: false };
+  // 74 body pages fill 10 signatures; 9 would leave signatures blank, an error.
+  const s = { ...boards, frontBoard: false, signatures: 10 };
   assert.deepEqual(allocationSegments(layoutOf(76, s), bookParts(s)).map((g) => [g.name, g.ranges]), [
     ["Body", "1–74"],
     ["Back board", "75–76"],
@@ -76,4 +77,16 @@ test("derivedNumbers takes pieces per sheet from the body's group and adds up ev
   assert.equal(layout.perSheet.length, 2);
   assert.equal(derivedNumbers(layout).piecesPerSheet, 1);
   assert.equal(derivedNumbers(layout).sheets, 10);
+});
+
+test("fillerNote says how many blank pieces to cut for the boards, and their size", () => {
+  assert.equal(fillerNote(layoutOf(76, boards)), "Cut 2 blank pieces of 288 × 378 pt for the board fillers");
+  const one = { ...boards, frontBoard: false, signatures: 10 };
+  assert.equal(fillerNote(layoutOf(76, one)), "Cut 1 blank piece of 288 × 378 pt for the board filler");
+});
+
+test("fillerNote rounds the size to 2 decimals and is null without boards", () => {
+  const odd = impose(toBookSpec(Array.from({ length: 76 }, () => ({ width: 288.123, height: 378 })), boards));
+  assert.equal(fillerNote(odd), "Cut 2 blank pieces of 288.12 × 378 pt for the board fillers");
+  assert.equal(fillerNote(layoutOf(76, { ...DEFAULT_SETTINGS, signatures: 10 })), null);
 });

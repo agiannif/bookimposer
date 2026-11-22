@@ -1,7 +1,10 @@
 <script lang="ts">
+  import type { Snippet } from "svelte";
+
   // A live number input: every valid keystroke updates `value`; an empty or unparsable entry
   // mid-typing keeps the last valid value. Nothing is clamped, the engine reports bad values.
-  let { label, value = $bindable(), testid, unit = "" }: { label: string; value: number; testid: string; unit?: string } = $props();
+  /** `action` is drawn after the input, e.g. a button that fills it in. */
+  let { label, value = $bindable(), testid, unit = "", action }: { label: string; value: number; testid: string; unit?: string; action?: Snippet } = $props();
 
   function oninput(e: Event & { currentTarget: HTMLInputElement }) {
     const n = e.currentTarget.valueAsNumber;
@@ -11,9 +14,10 @@
 
 <label class="field">
   <span>{label}</span>
-  <span class="input">
+  <span class={["input", { "with-action": action }]}>
     <input type="number" {value} {oninput} data-testid={testid} />
     {#if unit}<span class="unit">{unit}</span>{/if}
+    {@render action?.()}
   </span>
 </label>
 
@@ -32,6 +36,10 @@
   input {
     width: 5.5em;
     text-align: right;
+  }
+  /* Leaves room for the action in a narrow panel. */
+  .with-action input {
+    width: 4em;
   }
   .unit {
     color: var(--muted);

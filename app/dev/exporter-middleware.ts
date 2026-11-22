@@ -3,7 +3,8 @@
 //   POST /__dev/export      multipart: pdf (file), layout (JSON text), cutMarks, foldMarks
 //                           -> PDF bytes, warnings as a JSON array in X-Export-Warnings
 // Every failure answers with { error }: 422 when the CLI rejects the work, 400 for a bad request,
-// 500 (logged) for anything unexpected. The Tauri app does not use this.
+// 500 (logged) for anything unexpected, 403 for a request from another origin. Errors name files
+// without the server's temp dir. The Tauri app does not use this.
 import { execFile } from "node:child_process";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { access, mkdtemp, rm, writeFile, readFile } from "node:fs/promises";
@@ -26,14 +27,16 @@ export interface ExporterOptions {
   forceExportFailure?: boolean;
   /** Where per-request temp dirs go. Defaults to the OS temp dir. */
   tmpRoot?: string;
+  /** How long a CLI run may take and how much it may print. Defaults to 120 s and 64 MiB. */
+  cliLimits?: { timeoutMs: number; maxBufferBytes: number };
 }
 
-/** An answer the caller should see: 422 when the CLI or PDFium setup rejects the work, 400 for a bad request. */
 /** JSON that is safe in an HTTP header: non-ASCII characters are escaped, so JSON.parse still restores them. */
 export function jsonHeader(value: unknown): string {
   return JSON.stringify(value).replace(/[\u0080-\uffff]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`);
 }
 
+/** An answer the caller should see: 422 when the CLI or PDFium setup rejects the work, 400 for a bad request. */
 class RequestError extends Error {
   status: number;
   constructor(message: string, status = 422) {
@@ -68,6 +71,7 @@ export function createExporterHandler(options: ExporterOptions = {}) {
   const forceExportFailure = options.forceExportFailure ?? Boolean(process.env.BOOKCOMPOSER_DEV_EXPORT_FAIL);
   const exportBin = join(repoRoot, "target/release/bookcomposer-export");
   const env = { ...process.env, PATH: `${rustupBin}:${process.env.PATH ?? ""}`, BOOKCOMPOSER_PDFIUM_DIR: pdfiumDir };
+  const { timeoutMs, maxBufferBytes } = options.cliLimits ?? { timeoutMs: 120_000, maxBufferBytes: 64 * 1024 * 1024 };
 
   // One build per handler, started by the first request that needs it.
   let build: Promise<unknown> | undefined;
@@ -78,7 +82,8 @@ export function createExporterHandler(options: ExporterOptions = {}) {
       throw e;
     }));
 
-  async function cli(args: string[]): Promise<{ stdout: string; stderr: string }> {
+  /** Runs the export CLI on files in `dir`, whose path is left out of its error messages. */
+  async function cli(args: string[], dir: string): Promise<{ stdout: string; stderr: string }> {
     try {
       await access(join(pdfiumDir, pdfiumLibrary));
     } catch {
@@ -90,17 +95,21 @@ export function createExporterHandler(options: ExporterOptions = {}) {
       throw new Error(`cargo build failed: ${(e as { stderr?: string }).stderr ?? e}`);
     }
     try {
-      return await run(exportBin, args, { env });
+      return await run(exportBin, args, { env, timeout: timeoutMs, maxBuffer: maxBufferBytes });
     } catch (e) {
-      const { stderr } = e as { stderr?: string };
-      throw new RequestError(stderr?.trim() || String(e));
+      const { stderr, code, killed } = e as { stderr?: string; code?: unknown; killed?: boolean };
+      if (code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER") {
+        throw new RequestError(`The exporter wrote more than ${maxBufferBytes} bytes of output and was stopped`);
+      }
+      if (killed) throw new RequestError(`The exporter took longer than ${timeoutMs / 1000} s and was stopped`);
+      throw new RequestError((stderr?.trim() || String(e)).replaceAll(join(dir, "/"), ""));
     }
   }
 
   async function pageSizes(req: IncomingMessage, res: ServerResponse, dir: string): Promise<void> {
     const input = join(dir, "input.pdf");
     await writeFile(input, await readBody(req));
-    const { stdout } = await cli(["page-sizes", input]);
+    const { stdout } = await cli(["page-sizes", input], dir);
     res.writeHead(200, { "content-type": "application/json" });
     res.end(stdout);
   }
@@ -132,7 +141,7 @@ export function createExporterHandler(options: ExporterOptions = {}) {
     const args = ["export", "--layout", layout, "--input", input, "--output", output];
     if (textField(form, "cutMarks") === "true") args.push("--cut-marks");
     if (textField(form, "foldMarks") === "true") args.push("--fold-marks");
-    const { stderr } = await cli(args);
+    const { stderr } = await cli(args, dir);
     const warnings = stderr.split("\n").filter((line) => line.trim() !== "");
     res.writeHead(200, { "content-type": "application/pdf", "x-export-warnings": jsonHeader(warnings) });
     res.end(await readFile(output));
@@ -142,6 +151,12 @@ export function createExporterHandler(options: ExporterOptions = {}) {
     const path = (req.url ?? "").split("?")[0];
     const action = req.method === "POST" ? { "/__dev/page-sizes": pageSizes, "/__dev/export": exportPdf }[path] : undefined;
     if (!action) return next();
+    // Only the app's own pages may use these endpoints; a page on another site could otherwise post here.
+    const origin = req.headers.origin;
+    if (origin !== undefined && origin !== `http://${req.headers.host}`) {
+      sendJson(res, 403, { error: `Requests from another origin (${origin}) are refused` });
+      return;
+    }
     let dir: string | undefined;
     try {
       dir = await mkdtemp(join(options.tmpRoot ?? tmpdir(), "bookcomposer-"));

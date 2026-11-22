@@ -35,14 +35,44 @@ test('folds 2 gives one piece per signature', () => {
   assert.deepEqual(r.body, { bodyPages: 72, pagesPerSignature: 8, piecesPerSignature: 1, blanksAdded: 0 })
 })
 
-test('folds 3 with too few pages warns about empty signatures', () => {
-  const r = allocatePages(workedExample({ parts: [{ type: 'board' }, body(9, 3), { type: 'board' }] }))
-  assert.deepEqual(r.body, { bodyPages: 72, pagesPerSignature: 16, piecesPerSignature: 1, blanksAdded: 72 })
-  assert.equal(r.allocations.length, 3)
-  assert.equal(r.issues.length, 1)
-  assert.equal(r.issues[0].code, 'empty-signatures')
-  assert.equal(r.issues[0].severity, 'warning')
-  assert.deepEqual(r.issues[0].data, { count: 4 })
+const boards = (signatures: number, folds: 1 | 2 | 3) => workedExample({ parts: [{ type: 'board' }, body(signatures, folds), { type: 'board' }] })
+
+test('more signatures than the pages can fill is an error, and nothing is allocated', () => {
+  // 72 body pages in folds-3 signatures of 16 pages fill at most 5.
+  const r = allocatePages(boards(9, 3))
+  assert.deepEqual(r.allocations, [])
+  assert.equal(r.body, null)
+  assert.deepEqual(r.issues, [{
+    code: 'too-many-signatures', severity: 'error',
+    message: 'Too many signatures: with 72 body pages, at most 5 signatures can hold content',
+    data: { bodyPages: 72, maxSignatures: 5 },
+  }])
+})
+
+test('the most signatures that can hold content is ceil(body pages / pages per piece)', () => {
+  for (const [folds, max] of [[1, 18], [2, 9], [3, 5]] as const) {
+    assert.deepEqual(allocatePages(boards(max, folds)).issues, [], `${max} signatures of folds ${folds}`)
+    assert.equal(allocatePages(boards(max + 1, folds)).issues[0]?.code, 'too-many-signatures', `${max + 1} signatures of folds ${folds}`)
+  }
+})
+
+test('a count within the maximum that still leaves a signature blank is an error too', () => {
+  // Signatures are all one size: 10 of 8 pages hold 80, so 72 pages leave the last one blank.
+  const r = allocatePages(boards(10, 1))
+  assert.deepEqual(r.allocations, [])
+  assert.deepEqual(r.issues, [{
+    code: 'too-many-signatures', severity: 'error',
+    message: 'Too many signatures: with 72 body pages, 10 signatures of 8 pages leave 1 entirely blank',
+    data: { bodyPages: 72, maxSignatures: 18 },
+  }])
+})
+
+test('an absurd signature count is refused at once', () => {
+  const started = performance.now()
+  const r = allocatePages(boards(9_000_000_000, 1))
+  assert.ok(performance.now() - started < 50, 'took too long')
+  assert.equal(r.issues[0]?.code, 'too-many-signatures')
+  assert.deepEqual(r.issues[0]?.data, { bodyPages: 72, maxSignatures: 18 })
 })
 
 test('multiple boards on each side keep list order', () => {

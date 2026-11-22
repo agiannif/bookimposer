@@ -68,3 +68,22 @@ test("clear revokes every URL and encodes again after", async () => {
   assert.notEqual(await urls.url(a), url);
   assert.deepEqual(encoded, ["A", "A"]);
 });
+
+test("keepAtLeast raises the cap so every URL on screen stays live", async () => {
+  const { urls } = setup(2);
+  urls.keepAtLeast(3);
+  const all = [await urls.url(bitmap("A")), await urls.url(bitmap("B")), await urls.url(bitmap("C"))];
+  assert.deepEqual(all.map(live), [true, true, true]);
+  await urls.url(bitmap("D"));
+  await Promise.resolve();
+  assert.equal(live(all[0]!), false, "the cap is 3 now, so A goes");
+});
+
+test("keepAtLeast never lowers the cap below maxUrls", async () => {
+  const { urls } = setup(2);
+  urls.keepAtLeast(1);
+  const a = await urls.url(bitmap("A"));
+  await urls.url(bitmap("B"));
+  await Promise.resolve();
+  assert.equal(live(a), true);
+});

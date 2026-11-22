@@ -16,6 +16,10 @@ test("toBookSpec resolves named sheets and passes custom sizes through", () => {
   assert.deepEqual(toBookSpec(pages(8), DEFAULT_SETTINGS).print.sheet, { width: 612, height: 792 });
   const a4 = toBookSpec(pages(8), { ...DEFAULT_SETTINGS, print: { ...DEFAULT_SETTINGS.print, sheet: "a4" } });
   assert.deepEqual(a4.print.sheet, { width: 595.28, height: 841.89 });
+  const tabloid = toBookSpec(pages(8), { ...DEFAULT_SETTINGS, print: { ...DEFAULT_SETTINGS.print, sheet: "tabloid" } });
+  assert.deepEqual(tabloid.print.sheet, { width: 792, height: 1224 });
+  const a3 = toBookSpec(pages(8), { ...DEFAULT_SETTINGS, print: { ...DEFAULT_SETTINGS.print, sheet: "a3" } });
+  assert.deepEqual(a3.print.sheet, { width: 841.89, height: 1190.55 });
   const custom = { width: 500, height: 700 };
   const c = toBookSpec(pages(8), { ...DEFAULT_SETTINGS, print: { ...DEFAULT_SETTINGS.print, sheet: custom } });
   assert.deepEqual(c.print.sheet, custom);

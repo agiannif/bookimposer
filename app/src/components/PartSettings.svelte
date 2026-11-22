@@ -5,7 +5,8 @@
   import FoldsField from "./FoldsField.svelte";
   import NumberField from "./NumberField.svelte";
 
-  let { ws, part, derived }: { ws: BookWorkspace; part: BookPart; derived: DerivedNumbers } = $props();
+  /** `fillerNote` says what to cut for the boards' fillers; null when there are no boards. */
+  let { ws, part, derived, fillerNote }: { ws: BookWorkspace; part: BookPart; derived: DerivedNumbers; fillerNote: string | null } = $props();
 
   const rows: { label: string; key: keyof DerivedNumbers; testid: string }[] = [
     { label: "Pages per signature", key: "pagesPerSignature", testid: "derived-pages-per-signature" },
@@ -19,7 +20,11 @@
 <section class="panel" aria-labelledby="part-settings-heading">
   <h2 id="part-settings-heading">{part.name}</h2>
   {#if part.kind === "body"}
-    <NumberField label="Signatures" bind:value={ws.settings.signatures} testid="signatures" />
+    <NumberField label="Signatures" bind:value={ws.settings.signatures} testid="signatures">
+      {#snippet action()}
+        <button type="button" class="suggest" onclick={() => ws.suggestSignatures()} data-testid="suggest-signatures">Suggest</button>
+      {/snippet}
+    </NumberField>
     <FoldsField bind:value={ws.settings.folds} />
     <dl>
       {#each rows as row (row.key)}
@@ -31,10 +36,15 @@
     </dl>
   {:else}
     <p class="hint">A board takes 2 pages of the PDF and has no settings of its own.</p>
+    {#if fillerNote}<p data-testid="filler-note">{fillerNote}</p>{/if}
   {/if}
 </section>
 
 <style>
+  .suggest {
+    padding: var(--space-1) var(--space-2);
+    font-size: 12px;
+  }
   dl {
     margin: 0;
     padding-top: var(--space-3);

@@ -32,7 +32,7 @@ Options:
   --folds 1|2|3       folds per signature (default 1)
   --front-board       add a front board (cover) before the body
   --back-board        add a back board (cover) after the body
-  --sheet SIZE        letter, a4, or WxH in points (default letter)
+  --sheet SIZE        letter, a4, tabloid, a3, or WxH in points (default letter)
   --margin PT         sheet margin in points (default 18)
   --gap PT            gap between pieces in points (default 0)
   --bleed PT          bleed in points (default 0)

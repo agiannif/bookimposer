@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { SHEET_SIZES } from "../../../engine/src/index.ts";
+  import { SHEET_SIZES, type SheetName } from "../../../engine/src/index.ts";
   import type { BookWorkspace } from "../lib/workspace.svelte.ts";
   import NumberField from "./NumberField.svelte";
 
@@ -11,7 +11,7 @@
 
   function chooseSheet(e: Event & { currentTarget: HTMLSelectElement }) {
     const choice = e.currentTarget.value;
-    if (choice === "letter" || choice === "a4") print.sheet = choice;
+    if (Object.hasOwn(SHEET_SIZES, choice)) print.sheet = choice as SheetName;
     else if (typeof print.sheet === "string") print.sheet = { ...SHEET_SIZES[print.sheet] };
   }
 
@@ -32,6 +32,8 @@
   <select value={sheetChoice} onchange={chooseSheet} data-testid="sheet-size">
     <option value="letter">Letter</option>
     <option value="a4">A4</option>
+    <option value="tabloid">Tabloid</option>
+    <option value="a3">A3</option>
     <option value="custom">Custom</option>
   </select>
 </label>

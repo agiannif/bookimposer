@@ -10,7 +10,7 @@ export PLAYWRIGHT_BROWSERS_PATH := $(CURDIR)/app/.playwright-browsers
 PDFIUM_LIB := $(if $(filter Darwin,$(shell uname -s)),libpdfium.dylib,libpdfium.so)
 
 .DEFAULT_GOAL := help
-.PHONY: help layout-fixtures fetch-pdfium test test-engine test-export e2e typecheck lint fmt build release require-pdfium app-dev app-test app-check app-e2e app-browsers app-fixtures tauri-check tauri-test ipc-fixtures
+.PHONY: help layout-fixtures fetch-pdfium test test-engine test-export e2e typecheck lint fmt build release require-pdfium app-dev app-test app-check app-e2e app-browsers app-fixtures app-screenshots tauri-check tauri-test ipc-fixtures
 
 help: ## List targets
 	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  %-16s %s\n", $$1, $$2}'
@@ -46,7 +46,7 @@ e2e: require-pdfium ## Run the end-to-end impose-pdf test
 	cargo test -p pdf-export --test cli impose_pdf
 
 app-dev: ## Run the app dev server on 127.0.0.1:5173
-	@echo "Open http://localhost:5173 — from a remote box use: ssh -L 5173:localhost:5173 <host>"
+	@echo "Open http://127.0.0.1:5173. From a remote box: ssh -L 5173:127.0.0.1:5173 <host>"
 	cd app && npm run dev
 
 app-test: ## Run the app unit tests
@@ -57,6 +57,10 @@ app-check: ## Typecheck the app (svelte-check and tsc)
 
 app-fixtures: require-pdfium ## Regenerate the app's test PDFs
 	cargo run --quiet -p pdf-export --example make_app_fixtures -- $(CURDIR)/app/e2e/fixtures
+
+app-screenshots: ## Screenshot the workspace into OUT=dir at 1280x800 and 1100x700 (needs 'make app-dev' running)
+	@test -n "$(OUT)" || { echo "Usage: make app-screenshots OUT=dir" >&2; exit 2; }
+	cd app && node scripts/screenshot-workspace.ts $(abspath $(OUT))
 
 app-browsers: ## Download Playwright's Chromium into app/.playwright-browsers
 	cd app && npx playwright install chromium

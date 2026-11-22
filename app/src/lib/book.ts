@@ -1,8 +1,8 @@
 import { pagesPerPiece, SHEET_SIZES } from "../../../engine/src/index.ts";
-import type { BookSpec, DuplexFlip, FoldCount, MismatchPolicy, PartSpec, Size } from "../../../engine/src/index.ts";
+import type { BookSpec, DuplexFlip, FoldCount, MismatchPolicy, PartSpec, SheetName, Size } from "../../../engine/src/index.ts";
 
 export interface PrintChoice {
-  sheet: "letter" | "a4" | { width: number; height: number };
+  sheet: SheetName | { width: number; height: number };
   duplex: DuplexFlip;
   margin: number;
   gap: number;

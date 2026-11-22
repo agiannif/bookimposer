@@ -33,6 +33,12 @@
     }
   }
 
+  // Back to the plain start screen: the project and any error about its PDF go.
+  function oncancelproject() {
+    project = null;
+    error = null;
+  }
+
   async function openProject() {
     projectError = null;
     error = null;
@@ -49,7 +55,7 @@
 </script>
 
 {#if screen === "start"}
-  <Start {busy} {error} {project} {projectError} onpdf={openPdf} onproject={openProject} oncancelproject={() => (project = null)} />
+  <Start {busy} {error} {project} {projectError} onpdf={openPdf} onproject={openProject} {oncancelproject} />
 {:else if screen === "setup"}
   <Setup {ws} onstart={() => (screen = "workspace")} />
 {:else}

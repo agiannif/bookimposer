@@ -1,6 +1,6 @@
 <script lang="ts">
   import { bookParts, type PartKind } from "../lib/book.ts";
-  import { allocationSegments, derivedNumbers } from "../lib/layout-view.ts";
+  import { allocationSegments, derivedNumbers, fillerNote } from "../lib/layout-view.ts";
   import type { PdfBackend } from "../lib/backend.ts";
   import { serializeProject } from "../lib/project.ts";
   import { sha256Hex } from "../lib/hash.ts";
@@ -46,10 +46,9 @@
     </div>
     <div class="buttons">
       <button type="button" onclick={saveProject} data-testid="save-project">Save project</button>
+      <ExportBar {ws} {backend} />
     </div>
   </header>
-
-  <ExportBar {ws} {backend} />
 
   {#if saveError}<p class="error" role="alert" data-testid="save-error">{saveError}</p>{/if}
   {#if ws.warnings.length}
@@ -62,7 +61,7 @@
   {/if}
 
   <AllocationBar segments={allocationSegments(layout, parts)} />
-  <IssueBanner issues={layout.issues} />
+  <IssueBanner issues={ws.issues} />
 
   <div class="columns">
     <aside class="left">
@@ -73,21 +72,25 @@
       </section>
     </aside>
     <div class="middle">
-      <PartSettings {ws} {part} derived={derivedNumbers(layout)} />
+      <PartSettings {ws} {part} derived={derivedNumbers(layout)} fillerNote={fillerNote(layout)} />
     </div>
     <section class="sheets panel" aria-label="Sheets" data-testid="sheet-area">
       <SheetView {layout} pdf={ws.pdf!.bytes} boxes={ws.pdf!.boxes} />
     </section>
-    <section class="preview panel" aria-labelledby="preview-heading" data-testid="preview-3d">
-      <h2 id="preview-heading">3D preview</h2>
-      <p class="hint">3D preview coming soon</p>
+    <!-- A slim rail until the 3D preview lands, so the sheets get the width. -->
+    <section class="preview" aria-label="3D preview" data-testid="preview-3d">
+      <span class="hint">3D preview · coming soon</span>
     </section>
   </div>
 </div>
 
 <style>
+  /* Fills the window exactly, so the sheets can size to the height left; the side columns scroll.
+     The minimums match the Tauri window's; narrower browser windows scroll instead. */
   .workspace {
-    min-height: 100vh;
+    height: 100vh;
+    min-width: 1100px;
+    min-height: 700px;
     padding: var(--space-4);
     display: flex;
     flex-direction: column;
@@ -130,21 +133,30 @@
   }
   .columns {
     flex: 1;
+    min-height: 0;
     display: grid;
-    grid-template-columns: 240px 260px minmax(320px, 1fr) 240px;
+    grid-template-columns: 240px 260px minmax(0, 1fr) 32px;
     gap: var(--space-3);
-    align-items: start;
   }
   .left, .middle {
+    min-height: 0;
+    overflow-y: auto;
     display: flex;
     flex-direction: column;
     gap: var(--space-3);
   }
   .sheets {
-    align-self: stretch;
-    min-height: 420px;
+    min-height: 0;
   }
   .preview {
-    align-self: stretch;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px dashed var(--line);
+    border-radius: var(--radius);
+  }
+  .preview span {
+    writing-mode: vertical-rl;
+    white-space: nowrap;
   }
 </style>

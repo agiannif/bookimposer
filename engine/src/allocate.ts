@@ -46,6 +46,16 @@ export function allocatePages(spec: BookSpec): AllocationResult {
   const piece = pagesPerPiece(folds)
   const pagesPerSignature = Math.ceil(Math.ceil(bodyPages / signatures) / piece) * piece
   const blanksAdded = signatures * pagesPerSignature - bodyPages
+  // Checked before any per-page work, so an absurd count costs nothing. Every count above
+  // maxSignatures leaves a signature blank; since all signatures are one size, a few counts below
+  // it do too (72 pages in 10 signatures of 8).
+  if (blanksAdded >= pagesPerSignature) {
+    const maxSignatures = Math.max(1, Math.ceil(bodyPages / piece))
+    const message = signatures > maxSignatures
+      ? `Too many signatures: with ${bodyPages} body pages, at most ${maxSignatures} signatures can hold content`
+      : `Too many signatures: with ${bodyPages} body pages, ${signatures} signatures of ${pagesPerSignature} pages leave ${Math.floor(blanksAdded / pagesPerSignature)} entirely blank`
+    return failure({ code: 'too-many-signatures', severity: 'error', message, data: { bodyPages, maxSignatures } })
+  }
 
   const frontPages = bodyIndex * 2
   const allocations: PartAllocation[] = spec.parts.map((part, partIndex) => {
@@ -60,17 +70,9 @@ export function allocatePages(spec: BookSpec): AllocationResult {
     return { partIndex, type: 'board', pdfPages: [start, start + 1] }
   })
 
-  const issues: Issue[] = []
-  if (blanksAdded >= pagesPerSignature) {
-    issues.push({
-      code: 'empty-signatures', severity: 'warning',
-      message: 'Some signatures would be entirely blank.',
-      data: { count: Math.floor(blanksAdded / pagesPerSignature) },
-    })
-  }
   return {
     allocations,
     body: { bodyPages, pagesPerSignature, piecesPerSignature: pagesPerSignature / piece, blanksAdded },
-    issues,
+    issues: [],
   }
 }

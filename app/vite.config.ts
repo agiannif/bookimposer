@@ -13,6 +13,7 @@ export default defineConfig(({ command }) => ({
       }]
       : []),
   ],
-  // The app imports the engine sources by relative path, so the dev server must serve ../engine.
-  server: { host: "127.0.0.1", port: 5173, strictPort: true, fs: { allow: [".."] } },
+  // The app imports the engine sources by relative path, so the dev server serves ../engine too,
+  // and nothing else outside the app.
+  server: { host: "127.0.0.1", port: 5173, strictPort: true, fs: { allow: [".", "../engine/src"] } },
 }));

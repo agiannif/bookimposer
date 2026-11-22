@@ -155,3 +155,46 @@ test("warnings with non-ASCII text survive the header encoding", () => {
   assert.match(header, /^[\x20-\x7e]*$/);
   assert.deepEqual(JSON.parse(header), warnings);
 });
+
+test("a CLI error names the file without the server's temp path", async () => {
+  const res = await fetch(`${base}/__dev/page-sizes`, { method: "POST", body: "not a pdf" });
+  const error = await errorOf(res, 422);
+  assert.equal(error, "input.pdf: not a PDF or the file is damaged");
+});
+
+test("a request from another origin is refused with 403", async () => {
+  const res = await fetch(`${base}/__dev/page-sizes`, { method: "POST", body: pdf, headers: { origin: "http://evil.example" } });
+  assert.match(await errorOf(res, 403), /origin/i);
+});
+
+test("a request from the server's own origin is served", async () => {
+  const res = await fetch(`${base}/__dev/page-sizes`, { method: "POST", body: pdf, headers: { origin: base } });
+  assert.equal(res.status, 200);
+});
+
+/** A repo whose cargo does nothing and whose export binary is `script`, to drive the CLI limits. */
+async function fakeExporter(t: { after(fn: () => unknown): void }, script: string[]): Promise<{ repoRoot: string; rustupBin: string; pdfiumDir: string }> {
+  const root = await mkdtemp(join(tmpdir(), "bookcomposer-test-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await mkdir(join(root, "bin"));
+  await writeFile(join(root, "bin/cargo"), "#!/bin/sh\n");
+  await chmod(join(root, "bin/cargo"), 0o755);
+  await mkdir(join(root, "repo/target/release"), { recursive: true });
+  await writeFile(join(root, "repo/target/release/bookcomposer-export"), ["#!/bin/sh", ...script].join("\n"));
+  await chmod(join(root, "repo/target/release/bookcomposer-export"), 0o755);
+  return { repoRoot: join(root, "repo"), rustupBin: join(root, "bin"), pdfiumDir: new URL("../../vendor/pdfium/lib", import.meta.url).pathname };
+}
+
+test("a CLI run that takes too long is stopped with a 422", async (t) => {
+  const url = await serve({ ...(await fakeExporter(t, ["exec sleep 5"])), cliLimits: { timeoutMs: 200, maxBufferBytes: 1024 } });
+  const started = Date.now();
+  const res = await fetch(`${url}/__dev/page-sizes`, { method: "POST", body: pdf });
+  assert.equal(await errorOf(res, 422), "The exporter took longer than 0.2 s and was stopped");
+  assert.ok(Date.now() - started < 3000);
+});
+
+test("a CLI run with more output than the buffer allows is stopped with a 422", async (t) => {
+  const url = await serve({ ...(await fakeExporter(t, ["head -c 4096 /dev/zero"])), cliLimits: { timeoutMs: 5000, maxBufferBytes: 1024 } });
+  const res = await fetch(`${url}/__dev/page-sizes`, { method: "POST", body: pdf });
+  assert.equal(await errorOf(res, 422), "The exporter wrote more than 1024 bytes of output and was stopped");
+});

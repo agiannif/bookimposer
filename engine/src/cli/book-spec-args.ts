@@ -1,10 +1,7 @@
 // Turns the book-spec CLI's flags and the PDF's page sizes into a BookSpec.
 import type { BookSpec, DuplexFlip, FoldCount, PartSpec, Size } from '../types.ts'
+import { SHEET_SIZES, type SheetName } from '../sheets.ts'
 
-export const SHEET_SIZES: Record<string, Size> = {
-  letter: { width: 612, height: 792 },
-  a4: { width: 595.28, height: 841.89 },
-}
 const VALUE_FLAGS = ['--signatures', '--folds', '--sheet', '--margin', '--gap', '--bleed', '--duplex']
 const SWITCH_FLAGS = ['--front-board', '--back-board']
 
@@ -15,10 +12,10 @@ function nonNegative(flag: string, text: string): number {
 }
 
 function parseSheet(text: string): Size {
-  if (Object.hasOwn(SHEET_SIZES, text)) return SHEET_SIZES[text]
+  if (Object.hasOwn(SHEET_SIZES, text)) return SHEET_SIZES[text as SheetName]
   const match = /^(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)$/.exec(text)
   if (!match || Number(match[1]) <= 0 || Number(match[2]) <= 0) {
-    throw new Error(`--sheet must be letter, a4 or WxH in points, got "${text}"`)
+    throw new Error(`--sheet must be letter, a4, tabloid, a3 or WxH in points, got "${text}"`)
   }
   return { width: Number(match[1]), height: Number(match[2]) }
 }

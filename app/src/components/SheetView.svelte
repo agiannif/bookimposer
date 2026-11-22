@@ -4,7 +4,7 @@
   import { onDestroy, untrack } from "svelte";
   import type { Layout, PagePlacement } from "../../../engine/src/index.ts";
   import type { PageBoxes } from "../lib/backend.ts";
-  import { imageRectForPlacement, sheetTransform, thumbnailWidth } from "../lib/sheet-geometry.ts";
+  import { fittedStage, imageRectForPlacement, sheetTransform, sidesLayout, thumbnailWidth } from "../lib/sheet-geometry.ts";
   import { BitmapUrls } from "../lib/thumbnail-urls.ts";
   import { ThumbnailCache, previewFailure, startThumbnailWorker } from "../lib/thumbnails.ts";
 
@@ -51,10 +51,16 @@
     e.preventDefault();
   }
 
-  // Both sides share one stage size, measured on the front.
-  let stageWidth = $state(0);
-  let stageHeight = $state(0);
-  const t = $derived(sheetTransform(layout.sheet, { width: stageWidth, height: stageHeight }));
+  // The sides fill the space they're given, side by side or stacked, whichever shows the sheet larger.
+  const GAP = 12;
+  const CAPTION_GAP = 8;
+  let areaWidth = $state(0);
+  let areaHeight = $state(0);
+  let captionHeight = $state(0);
+  const sides = $derived(sidesLayout(layout.sheet, { width: areaWidth, height: areaHeight }, GAP, captionHeight + CAPTION_GAP));
+  // Each stage hugs its sheet, so the caption sits right above it.
+  const stage = $derived(fittedStage(layout.sheet, sides.stage));
+  const t = $derived(sheetTransform(layout.sheet, stage));
   /** Sheet points per CSS pixel, for strokes and badges that keep their size on screen. */
   const px = $derived(1 / t.scale);
 
@@ -66,6 +72,7 @@
     const placed = [...sheet.front.placements, ...sheet.back.placements].filter((p) => p.pdfPage !== null);
     const pages = new Set(placed.map((p) => p.pdfPage!));
     cache.cancelAllExcept(pages);
+    urls.keepAtLeast(pages.size);
     untrack(() => {
       if ([...hrefs.keys()].some((page) => !pages.has(page))) {
         hrefs = new Map([...hrefs].filter(([page]) => pages.has(page)));
@@ -99,9 +106,9 @@
 
 {#snippet side(name: "front" | "back", label: string)}
   {@const placements = sheet![name].placements}
-  <figure class="side">
-    <figcaption>{label}</figcaption>
-    <div class="stage" style:aspect-ratio="{layout.sheet.width} / {layout.sheet.height}">
+  <figure class="side" style:gap="{CAPTION_GAP}px">
+    <figcaption bind:clientHeight={captionHeight}>{label}</figcaption>
+    <div class="stage" style:width="{stage.width}px" style:height="{stage.height}px">
       {#if t.scale > 0}
         <svg
           data-testid="sheet-{name}"
@@ -197,8 +204,7 @@
       <span>Sheet {index + 1} of {count}</span>
       <button type="button" aria-label="Next sheet" data-testid="sheet-next" disabled={index === count - 1} onclick={() => step(1)}>→</button>
     </div>
-    <div class="sides">
-      <div class="measure" bind:clientWidth={stageWidth} bind:clientHeight={stageHeight} style:aspect-ratio="{layout.sheet.width} / {layout.sheet.height}"></div>
+    <div class="sides" bind:clientWidth={areaWidth} bind:clientHeight={areaHeight} style:flex-direction={sides.direction} style:gap="{GAP}px">
       {@render side("front", "Front")}
       {@render side("back", "Back (as printed)")}
     </div>
@@ -212,6 +218,7 @@
 
 <style>
   .sheet-view {
+    height: 100%;
     display: flex;
     flex-direction: column;
     gap: var(--space-3);
@@ -225,23 +232,19 @@
   .stepper button {
     padding: var(--space-1) var(--space-3);
   }
+  /* Sized by its parent, never by the stages inside it, which are sized from this measurement. */
   .sides {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--space-3);
-    position: relative;
-  }
-  /* An invisible stand-in for one side's stage, sized like it, so both sides share one measurement. */
-  .measure {
-    position: absolute;
-    width: calc((100% - var(--space-3)) / 2);
-    visibility: hidden;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
   }
   .side {
     margin: 0;
     display: flex;
     flex-direction: column;
-    gap: var(--space-2);
   }
   figcaption {
     font-size: 12px;
@@ -250,7 +253,6 @@
   }
   .stage {
     position: relative;
-    width: 100%;
   }
   svg {
     position: absolute;

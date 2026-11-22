@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { impose, type PagePlacement } from "../../engine/src/index.ts";
 import { workedExample } from "../../engine/test/fixtures.ts";
 import type { PageBoxes } from "../src/lib/backend.ts";
-import { imageRectForPlacement, placementSvg, sheetTransform, thumbnailWidth } from "../src/lib/sheet-geometry.ts";
+import { fittedStage, imageRectForPlacement, placementSvg, sheetTransform, sidesLayout, thumbnailWidth } from "../src/lib/sheet-geometry.ts";
 
 const unit = { scale: 1, offsetX: 0, offsetY: 0 };
 
@@ -151,4 +151,35 @@ test("thumbnailWidth is the rendered page's displayed width in device pixels", (
   const turned = landscape().sheets[0]!.front.placements.find((p) => p.rotation === 90)!;
   assert.equal(thumbnailWidth(turned, plain, 1, 1.5), 288 * 1.5, "the upright page's width, not its panel's");
   assert.equal(thumbnailWidth(upright, inset, 1, 1), 306, "the whole crop box, margins included");
+});
+
+const letter = { width: 612, height: 792 };
+
+test("sidesLayout puts the sides side by side when that shows the sheet larger", () => {
+  // A wide area: side by side, each (1000 - 12) / 2 wide and 600 - 26 tall.
+  assert.deepEqual(sidesLayout(letter, { width: 1000, height: 600 }, 12, 26), {
+    direction: "row",
+    stage: { width: 494, height: 574 },
+  });
+});
+
+test("sidesLayout stacks the sides when that shows the sheet larger", () => {
+  // A wide landscape sheet in a tall area: stacked, each 500 wide and (900 - 12) / 2 - 26 tall.
+  assert.deepEqual(sidesLayout({ width: 1300, height: 850 }, { width: 500, height: 900 }, 12, 26), {
+    direction: "column",
+    stage: { width: 500, height: 418 },
+  });
+});
+
+test("sidesLayout never gives a negative stage", () => {
+  assert.deepEqual(sidesLayout(letter, { width: 0, height: 0 }, 12, 26), { direction: "row", stage: { width: 0, height: 0 } });
+});
+
+test("fittedStage shrinks a box to the sheet it fits plus the padding, at the same scale", () => {
+  // Width limits 612x792 in 300x2000: scale 268 / 612, so the sheet is 268 wide and 792 * scale tall.
+  const scale = 268 / 612;
+  const stage = fittedStage(letter, { width: 300, height: 2000 });
+  assert.deepEqual(stage, { width: 300, height: 792 * scale + 32 });
+  assert.equal(sheetTransform(letter, stage).scale, scale);
+  assert.deepEqual(fittedStage({ width: 0, height: 0 }, { width: 300, height: 300 }), { width: 300, height: 300 });
 });

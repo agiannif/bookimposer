@@ -1,7 +1,7 @@
 <script lang="ts">
-  import type { Issue } from "../../../engine/src/index.ts";
+  import type { AppIssue } from "../lib/issues.ts";
 
-  let { issues }: { issues: Issue[] } = $props();
+  let { issues }: { issues: AppIssue[] } = $props();
 </script>
 
 {#if issues.length > 0}

@@ -34,6 +34,16 @@ test('a single board goes on the side asked for', () => {
     [{ type: 'body', signatures: 1, folds: 1 }, { type: 'board' }])
 })
 
+test('sheet accepts the tabloid and a3 presets', () => {
+  assert.deepEqual(parseBookSpecArgs(['--signatures', '1', '--sheet', 'tabloid'], pageSizes).print.sheet, { width: 792, height: 1224 })
+  assert.deepEqual(parseBookSpecArgs(['--signatures', '1', '--sheet', 'a3'], pageSizes).print.sheet, { width: 841.89, height: 1190.55 })
+})
+
+test('a bad sheet names every preset', () => {
+  assert.throws(() => parseBookSpecArgs(['--signatures', '1', '--sheet', 'legal'], pageSizes),
+    /--sheet must be letter, a4, tabloid, a3 or WxH in points/)
+})
+
 test('sheet accepts WxH in points', () => {
   const spec = parseBookSpecArgs(['--signatures', '1', '--sheet', '500x700.5'], pageSizes)
   assert.deepEqual(spec.print.sheet, { width: 500, height: 700.5 })
