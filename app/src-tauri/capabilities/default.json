@@ -1,0 +1,12 @@
+{
+  "identifier": "default",
+  "description": "The main window: open and save dialogs, and reading or writing only the files the person picks in them.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "dialog:allow-open",
+    "dialog:allow-save",
+    "fs:allow-read-text-file",
+    "fs:allow-write-file"
+  ]
+}

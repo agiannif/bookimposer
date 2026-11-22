@@ -52,6 +52,19 @@ A page's trim size is its TrimBox, or its CropBox when it has none, or its Media
 
 Not carried over (yet): annotations and form fields. A warning names each page that has any.
 
+== Running the app
+
+[source,sh]
+----
+make app-dev
+----
+
+Open http://localhost:5173. On a remote box, forward the port first: `ssh -L 5173:localhost:5173 <host>`.
+
+Choose a book PDF, then set signatures, folds, boards and sheet size. The workspace shows the parts and where each page lands, the sheets one at a time with cut and fold lines, and any layout warnings or errors. Everything updates as you change a setting.
+
+*Save project* writes the settings to a `.bookcomposer.json` file. Open it from the start screen and choose the same PDF to continue. *Export PDF* saves `<name>-imposed.pdf` with the page content embedded as vector content, and lists anything the exporter could not carry over, such as annotations. It is disabled while the layout has errors.
+
 == Developing
 
 `make` lists every dev task. The PDF export crate (`crates/pdf-export`) needs Rust and the PDFium library, which `make fetch-pdfium` downloads into `vendor/pdfium/`.
@@ -60,11 +73,12 @@ Not carried over (yet): annotations and form fields. A warning names each page t
 ----
 (cd engine && npm install)
 make fetch-pdfium
-make test        # engine and pdf-export tests
+make test        # all tests: engine, pdf-export, app, Tauri commands
 make e2e         # end-to-end impose-pdf test
 make release     # release export binary
 make typecheck   # engine
 make lint        # rustfmt and clippy
+make tauri-check # compile the Tauri app (on Linux, needs the webkit2gtk-4.1 dev libraries)
 ----
 
 The Makefile expects the Rust toolchain in `RUSTUP_BIN` (default `/home/linuxbrew/.linuxbrew/opt/rustup/bin`) and loads PDFium from `BOOKCOMPOSER_PDFIUM_DIR` (default `vendor/pdfium/lib`); override either on the command line, e.g. `make test RUSTUP_BIN=~/.cargo/bin`.

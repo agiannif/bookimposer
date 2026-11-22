@@ -1,0 +1,21 @@
+{
+  "productName": "bookcomposer",
+  "version": "0.1.0",
+  "identifier": "app.bookcomposer",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://127.0.0.1:5173"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "bookcomposer",
+        "width": 1280,
+        "height": 800
+      }
+    ]
+  },
+  "bundle": {
+    "resources": ["resources/pdfium/*"]
+  }
+}

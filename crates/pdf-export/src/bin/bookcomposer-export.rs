@@ -1,7 +1,6 @@
 //! Command line front end for the PDF exporter.
 
-use pdf_export::{ExportError, ExportOptions, export, layout, page_sizes, pdfium};
-use serde_json::json;
+use pdf_export::{ExportError, ExportOptions, export, layout, page_sizes, page_sizes_json, pdfium};
 use std::process::ExitCode;
 
 const USAGE: &str = "\
@@ -115,13 +114,6 @@ fn print_page_sizes(input: &str) -> Result<(), String> {
     let source = read(input)?;
     let pdfium = pdfium::load().map_err(|error| ExportError::from(error).to_string())?;
     let boxes = page_sizes(&pdfium, &source).map_err(|error| describe(input, error))?;
-    let sizes: Vec<_> = boxes
-        .iter()
-        .map(|b| {
-            let (width, height) = b.displayed_trim_size();
-            json!({"width": width, "height": height})
-        })
-        .collect();
-    println!("{}", json!({"pageSizes": sizes, "boxes": boxes}));
+    println!("{}", page_sizes_json(&boxes));
     Ok(())
 }

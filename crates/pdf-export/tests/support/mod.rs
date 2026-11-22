@@ -140,7 +140,12 @@ pub fn fixture_pdf(pdfium: &Pdfium, pages: &[FixturePage]) -> Vec<u8> {
 /// The 76-page book the export tests impose: 288x378 pages with no TrimBox,
 /// labelled 1 to 76.
 pub fn book_pdf(pdfium: &Pdfium) -> Vec<u8> {
-    let pages: Vec<FixturePage> = (1..=76)
+    labelled_book(pdfium, 76)
+}
+
+/// A book of `pages` 288x378 pages with no TrimBox, labelled 1 to `pages`.
+pub fn labelled_book(pdfium: &Pdfium, pages: u32) -> Vec<u8> {
+    let pages: Vec<FixturePage> = (1..=pages)
         .map(|label| FixturePage {
             media: (0.0, 0.0, 288.0, 378.0),
             trim: None,

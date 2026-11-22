@@ -6,10 +6,11 @@ SHELL := bash
 RUSTUP_BIN ?= /home/linuxbrew/.linuxbrew/opt/rustup/bin
 export PATH := $(RUSTUP_BIN):$(PATH)
 export BOOKCOMPOSER_PDFIUM_DIR ?= $(CURDIR)/vendor/pdfium/lib
+export PLAYWRIGHT_BROWSERS_PATH := $(CURDIR)/app/.playwright-browsers
 PDFIUM_LIB := $(if $(filter Darwin,$(shell uname -s)),libpdfium.dylib,libpdfium.so)
 
 .DEFAULT_GOAL := help
-.PHONY: help layout-fixtures fetch-pdfium test test-engine test-export e2e typecheck lint fmt build release require-pdfium
+.PHONY: help layout-fixtures fetch-pdfium test test-engine test-export e2e typecheck lint fmt build release require-pdfium app-dev app-test app-check app-e2e app-browsers app-fixtures tauri-check tauri-test ipc-fixtures
 
 help: ## List targets
 	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  %-16s %s\n", $$1, $$2}'
@@ -33,7 +34,7 @@ layout-fixtures: ## Regenerate checked-in Layout JSON fixtures
 fetch-pdfium: ## Download the PDFium library into vendor/pdfium
 	scripts/fetch-pdfium
 
-test: test-engine test-export ## Run all tests
+test: test-engine test-export app-test tauri-test ## Run all tests
 
 test-engine: ## Run the TypeScript engine tests
 	cd engine && npm test
@@ -44,12 +45,40 @@ test-export: require-pdfium ## Run the pdf-export crate tests (needs PDFium)
 e2e: require-pdfium ## Run the end-to-end impose-pdf test
 	cargo test -p pdf-export --test cli impose_pdf
 
+app-dev: ## Run the app dev server on 127.0.0.1:5173
+	@echo "Open http://localhost:5173 — from a remote box use: ssh -L 5173:localhost:5173 <host>"
+	cd app && npm run dev
+
+app-test: ## Run the app unit tests
+	cd app && npm test
+
+app-check: ## Typecheck the app (svelte-check and tsc)
+	cd app && npm run check
+
+app-fixtures: require-pdfium ## Regenerate the app's test PDFs
+	cargo run --quiet -p pdf-export --example make_app_fixtures -- $(CURDIR)/app/e2e/fixtures
+
+app-browsers: ## Download Playwright's Chromium into app/.playwright-browsers
+	cd app && npx playwright install chromium
+
+app-e2e: ## Run the app browser tests (needs 'make app-browsers')
+	cd app && npm run e2e
+
+tauri-check: ## Compile the Tauri app
+	cargo check -p bookcomposer-app
+
+ipc-fixtures: ## Regenerate the golden Tauri IPC frames (after a deliberate wire format change)
+	cd app && node test/make-ipc-fixtures.ts
+
+tauri-test: require-pdfium ## Test the Tauri app's commands (needs PDFium)
+	cargo test -p bookcomposer-app
+
 typecheck: ## Typecheck the TypeScript engine
 	cd engine && npm run typecheck
 
 lint: ## Check Rust formatting and run clippy
 	cargo fmt --check
-	cargo clippy -p pdf-export --all-targets -- -D warnings
+	cargo clippy -p pdf-export -p bookcomposer-app --all-targets -- -D warnings
 
 fmt: ## Format Rust code
 	cargo fmt

@@ -1,3 +1,5 @@
 export { impose } from './impose.ts'
 export type * from './types.ts'
 export type { Rect, Rotation } from './geometry.ts'
+export { pagesPerPiece } from './allocate.ts'
+export { SHEET_SIZES } from './cli/book-spec-args.ts'

@@ -111,6 +111,19 @@ pub fn page_sizes(pdfium: &Pdfium, source: &[u8]) -> Result<Vec<PageBoxes>, Expo
     page_boxes(&load_pdf(pdfium, source)?)
 }
 
+/// The page-sizes report for `boxes`: each page's trim size as it displays
+/// (after /Rotate) under `pageSizes`, and the stored boxes under `boxes`.
+pub fn page_sizes_json(boxes: &[PageBoxes]) -> serde_json::Value {
+    let sizes: Vec<_> = boxes
+        .iter()
+        .map(|b| {
+            let (width, height) = b.displayed_trim_size();
+            serde_json::json!({"width": width, "height": height})
+        })
+        .collect();
+    serde_json::json!({"pageSizes": sizes, "boxes": boxes})
+}
+
 /// Opens the PDF in `source`, reporting a non-PDF or damaged input as
 /// `NotAPdf` and one that needs a password as `PasswordProtected`.
 fn load_pdf<'a>(pdfium: &'a Pdfium, source: &'a [u8]) -> Result<PdfDocument<'a>, ExportError> {

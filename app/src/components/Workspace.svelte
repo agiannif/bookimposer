@@ -1,0 +1,150 @@
+<script lang="ts">
+  import { bookParts, type PartKind } from "../lib/book.ts";
+  import { allocationSegments, derivedNumbers } from "../lib/layout-view.ts";
+  import type { PdfBackend } from "../lib/backend.ts";
+  import { serializeProject } from "../lib/project.ts";
+  import { sha256Hex } from "../lib/hash.ts";
+  import type { BookWorkspace } from "../lib/workspace.svelte.ts";
+  import AllocationBar from "./AllocationBar.svelte";
+  import ExportBar from "./ExportBar.svelte";
+  import IssueBanner from "./IssueBanner.svelte";
+  import PartSettings from "./PartSettings.svelte";
+  import PartsList from "./PartsList.svelte";
+  import PrintSettings from "./PrintSettings.svelte";
+  import SheetView from "./SheetView.svelte";
+
+  let { ws, backend }: { ws: BookWorkspace; backend: PdfBackend } = $props();
+
+  const parts = $derived(bookParts(ws.settings));
+  const layout = $derived(ws.layout!);
+  let selected: PartKind = $state("body");
+  // A removed board can't stay selected; fall back to the body, which always exists.
+  const part = $derived(parts.find((p) => p.kind === selected) ?? parts.find((p) => p.kind === "body")!);
+
+  let saveError: string | null = $state(null);
+  async function saveProject() {
+    const pdf = ws.pdf!;
+    saveError = null;
+    try {
+      const text = serializeProject({
+        version: 1,
+        pdf: { name: pdf.name, pageCount: pdf.pageSizes.length, sha256: await sha256Hex(pdf.bytes) },
+        settings: $state.snapshot(ws.settings),
+      });
+      await backend.saveProject(text, `${pdf.name.replace(/\.pdf$/i, "")}.bookcomposer.json`);
+    } catch (e) {
+      saveError = `Could not save the project: ${e instanceof Error ? e.message : String(e)}`;
+    }
+  }
+</script>
+
+<div class="workspace">
+  <header class="top">
+    <div class="title">
+      <h1>bookcomposer</h1>
+      <span class="hint">{ws.pdf?.name} · {ws.pdf?.pageSizes.length} pages</span>
+    </div>
+    <div class="buttons">
+      <button type="button" onclick={saveProject} data-testid="save-project">Save project</button>
+    </div>
+  </header>
+
+  <ExportBar {ws} {backend} />
+
+  {#if saveError}<p class="error" role="alert" data-testid="save-error">{saveError}</p>{/if}
+  {#if ws.warnings.length}
+    <div class="warnings" role="status">
+      <ul>
+        {#each ws.warnings as warning}<li data-testid="project-warning">{warning}</li>{/each}
+      </ul>
+      <button type="button" aria-label="Dismiss warnings" onclick={() => (ws.warnings = [])} data-testid="dismiss-warnings">×</button>
+    </div>
+  {/if}
+
+  <AllocationBar segments={allocationSegments(layout, parts)} />
+  <IssueBanner issues={layout.issues} />
+
+  <div class="columns">
+    <aside class="left">
+      <PartsList {ws} bind:selected />
+      <section class="panel" aria-labelledby="print-heading">
+        <h2 id="print-heading">Print</h2>
+        <PrintSettings {ws} full />
+      </section>
+    </aside>
+    <div class="middle">
+      <PartSettings {ws} {part} derived={derivedNumbers(layout)} />
+    </div>
+    <section class="sheets panel" aria-label="Sheets" data-testid="sheet-area">
+      <SheetView {layout} pdf={ws.pdf!.bytes} boxes={ws.pdf!.boxes} />
+    </section>
+    <section class="preview panel" aria-labelledby="preview-heading" data-testid="preview-3d">
+      <h2 id="preview-heading">3D preview</h2>
+      <p class="hint">3D preview coming soon</p>
+    </section>
+  </div>
+</div>
+
+<style>
+  .workspace {
+    min-height: 100vh;
+    padding: var(--space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+  .top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .buttons {
+    display: flex;
+    gap: var(--space-2);
+  }
+  .error {
+    color: var(--error);
+  }
+  .warnings {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    background: var(--warning-soft);
+    color: var(--warning);
+    border-radius: var(--radius);
+  }
+  .warnings ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .title {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-3);
+  }
+  h1 {
+    font-size: 18px;
+  }
+  .columns {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 240px 260px minmax(320px, 1fr) 240px;
+    gap: var(--space-3);
+    align-items: start;
+  }
+  .left, .middle {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+  .sheets {
+    align-self: stretch;
+    min-height: 420px;
+  }
+  .preview {
+    align-self: stretch;
+  }
+</style>

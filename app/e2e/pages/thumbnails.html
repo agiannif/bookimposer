@@ -1,0 +1,17 @@
+<!doctype html>
+<!--
+  Test-only page for e2e/thumbnails.spec.ts; served by the dev server, never
+  built (Vite builds only index.html). Query: ?pdf=<file in e2e/fixtures>&page=<0-based>&width=<px>.
+  Draws ThumbnailCache.get(page, width) into the canvas, then sets data-ready,
+  or sets data-error on <body> if anything fails.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>thumbnail test</title>
+  </head>
+  <body>
+    <canvas></canvas>
+    <script type="module" src="./thumbnails.ts"></script>
+  </body>
+</html>
