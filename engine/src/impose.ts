@@ -1,7 +1,7 @@
 import { applyPoint, applyRect, compose, identity, mirrorX, rotateCw, rotationOf, translate } from './geometry.ts'
 import type { Affine } from './geometry.ts'
 import { allocatePages } from './allocate.ts'
-import { validateSpec } from './validate.ts'
+import { validateSpec, validSheet } from './validate.ts'
 import { fitPieces, pieceSize } from './fit.ts'
 import type { SlotFit } from './fit.ts'
 import { boardPiece, bodyPieces } from './pieces.ts'
@@ -9,7 +9,11 @@ import type { PanelAssignment, Piece } from './pieces.ts'
 import type { Rect, Rotation } from './geometry.ts'
 import type { BookSpec, DuplexFlip, MismatchPolicy, FoldLine, Issue, Layout, PagePlacement, Sheet, SheetLine, SheetSide, Size } from './types.ts'
 
-const emptyLayout = (issues: Issue[], allocations: Layout['allocations'] = [], body: Layout['body'] = null): Layout => ({
+// An unusable sheet size (missing, NaN, infinite, not positive) becomes 0x0 so the JSON stays readable.
+const emptyLayout = (
+  rawSheet: Size | undefined, issues: Issue[], allocations: Layout['allocations'] = [], body: Layout['body'] = null,
+): Layout => ({
+  sheet: validSheet(rawSheet) ? rawSheet : { width: 0, height: 0 },
   sheets: [], allocations, body, perSheet: [], fillers: { count: 0, size: { width: 0, height: 0 } }, issues,
 })
 
@@ -123,10 +127,10 @@ function buildSheet(pieces: Piece[], fit: SlotFit, size: Size, panel: Size, spec
 
 export function impose(spec: BookSpec): Layout {
   const invalid = validateSpec(spec)
-  if (invalid.length > 0) return emptyLayout(invalid)
+  if (invalid.length > 0) return emptyLayout(spec.print?.sheet, invalid)
 
   const { allocations, body, issues } = allocatePages(spec)
-  if (issues.some((i) => i.severity === 'error') || !body) return emptyLayout(issues, allocations, body)
+  if (issues.some((i) => i.severity === 'error') || !body) return emptyLayout(spec.print.sheet, issues, allocations, body)
 
   const bodyIndex = allocations.findIndex((a) => a.type === 'body')
   const bodyPart = spec.parts[bodyIndex]
@@ -159,7 +163,7 @@ export function impose(spec: BookSpec): Layout {
     const size = pieceSize(group.cols, group.rows, panel, bleed)
     const fit = fitPieces(size, spec.print)
     if (fit.perSheet === 0) {
-      return emptyLayout([...issues, {
+      return emptyLayout(spec.print.sheet, [...issues, {
         code: 'piece-does-not-fit', severity: 'error',
         message: 'A piece is too large for the sheet.',
         data: { width: size.width, height: size.height },
@@ -184,5 +188,5 @@ export function impose(spec: BookSpec): Layout {
       sheets: count,
     })
   }
-  return { sheets, allocations, body, perSheet, fillers: { count: boards.length, size: panel }, issues }
+  return { sheet: spec.print.sheet, sheets, allocations, body, perSheet, fillers: { count: boards.length, size: panel }, issues }
 }

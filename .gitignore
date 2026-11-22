@@ -1,3 +1,5 @@
 docs/
 .superpowers/
 engine/node_modules/
+vendor/
+target/

@@ -1,0 +1,11 @@
+= Test data
+
+The `*.layout.json` files are generated; regenerate them with `make layout-fixtures`.
+
+`encrypted.pdf` (743 bytes) is a one-page 288x378 PDF encrypted with the
+standard security handler, revision 2 (40-bit RC4), user password `u`, owner
+password `o`. Its page content is a black 100x100 square. It was written once
+by a short stdlib Python script that follows ISO 32000-1, 7.6.3 (Algorithms 2,
+3 and 4) and is committed as is; any tool that writes 40-bit RC4 encryption,
+such as `qpdf --encrypt u o 40 -- in.pdf encrypted.pdf`, makes an equivalent
+fixture. The tests check that it opens with password `u`.

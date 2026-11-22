@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+# Impose a book PDF into print-ready sheets. Run `scripts/impose-pdf --help` for details.
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+RUSTUP_BIN="${RUSTUP_BIN:-/home/linuxbrew/.linuxbrew/opt/rustup/bin}"
+export PATH="$RUSTUP_BIN:$PATH"
+export BOOKCOMPOSER_PDFIUM_DIR="${BOOKCOMPOSER_PDFIUM_DIR:-$REPO_ROOT/vendor/pdfium/lib}"
+EXPORT_BIN="$REPO_ROOT/target/release/bookcomposer-export"
+ENGINE_BIN="$REPO_ROOT/engine/bin"
+
+usage() {
+  cat <<USAGE
+Usage: scripts/impose-pdf --input book.pdf --output sheets.pdf --signatures N [options]
+
+Turns a book PDF into a print-ready PDF with two pages (front, back) per sheet,
+laid out for duplex printing, folding and binding. Use it when a book is ready
+and you want sheets to print. Pages are embedded unchanged, with no rasterization.
+
+It checks the flags, reads the page sizes from the PDF, imposes the book, stops
+if the layout has errors (warnings are printed and the export continues), then
+writes the sheets. Intermediate JSON (page-sizes.json, book-spec.json,
+layout.json) goes in a temp dir that is removed on success and named on
+failure, or in the --keep-temp dir, which is kept.
+
+Required:
+  --input FILE        source book PDF
+  --output FILE       sheets PDF to write
+  --signatures N      number of signatures in the body
+
+Options:
+  --folds 1|2|3       folds per signature (default 1)
+  --front-board       add a front board (cover) before the body
+  --back-board        add a back board (cover) after the body
+  --sheet SIZE        letter, a4, or WxH in points (default letter)
+  --margin PT         sheet margin in points (default 18)
+  --gap PT            gap between pieces in points (default 0)
+  --bleed PT          bleed in points (default 0)
+  --duplex EDGE       long-edge or short-edge (default long-edge)
+  --cut-marks         draw cut marks outside the content
+  --fold-marks        draw fold marks outside the content
+  --keep-temp DIR     write the intermediate JSON to DIR (created if needed)
+                      and keep it, e.g. to inspect the layout
+  -h, --help          show this help
+
+Needs PDFium (run 'make fetch-pdfium'; looked up in \$BOOKCOMPOSER_PDFIUM_DIR,
+default vendor/pdfium/lib) and builds target/release/bookcomposer-export with
+cargo (found in \$RUSTUP_BIN) on every run, which is a no-op when it is up to date.
+USAGE
+}
+
+fail() {
+  echo "impose-pdf: $*" >&2
+  exit 1
+}
+
+input=""
+output=""
+keep_temp=""
+spec_args=()
+export_args=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help) usage; exit 0 ;;
+    --input|--output|--keep-temp)
+      [[ $# -ge 2 ]] || fail "$1 needs a value"
+      case "$1" in
+        --input) input="$2" ;;
+        --output) output="$2" ;;
+        --keep-temp) keep_temp="$2" ;;
+      esac
+      shift 2 ;;
+    --cut-marks|--fold-marks) export_args+=("$1"); shift ;;
+    *) spec_args+=("$1"); shift ;; # validated by engine/bin/book-spec.ts
+  esac
+done
+[[ -n "$input" ]] || fail "--input is required (see --help)"
+[[ -n "$output" ]] || fail "--output is required (see --help)"
+[[ -f "$input" ]] || fail "input not found: $input"
+# Check the book flags now, on no pages, so a typo fails before the build.
+echo '{"pageSizes": []}' | node "$ENGINE_BIN/book-spec.ts" ${spec_args[@]+"${spec_args[@]}"} > /dev/null
+[[ -d "$BOOKCOMPOSER_PDFIUM_DIR" ]] || fail "PDFium not found in $BOOKCOMPOSER_PDFIUM_DIR. Run 'make fetch-pdfium' first."
+
+# Always run cargo so the binary is never stale; it is a no-op when up to date.
+(cd "$REPO_ROOT" && cargo build --release -p pdf-export --quiet) >&2 || fail "cargo build failed"
+
+if [[ -n "$keep_temp" ]]; then
+  mkdir -p "$keep_temp"
+  work="$keep_temp"
+else
+  work="$(mktemp -d)"
+fi
+trap 'status=$?; [[ $status -eq 0 ]] || echo "impose-pdf: failed; intermediate files are in $work" >&2' EXIT
+
+"$EXPORT_BIN" page-sizes "$input" > "$work/page-sizes.json"
+node "$ENGINE_BIN/book-spec.ts" ${spec_args[@]+"${spec_args[@]}"} < "$work/page-sizes.json" > "$work/book-spec.json"
+node "$ENGINE_BIN/impose.ts" < "$work/book-spec.json" > "$work/layout.json"
+node "$ENGINE_BIN/issues.ts" < "$work/layout.json"
+"$EXPORT_BIN" export --layout "$work/layout.json" --input "$input" --output "$output" ${export_args[@]+"${export_args[@]}"}
+
+[[ -n "$keep_temp" ]] || rm -rf "$work"

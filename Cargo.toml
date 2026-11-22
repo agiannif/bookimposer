@@ -1,0 +1,3 @@
+[workspace]
+members = ["crates/pdf-export"]
+resolver = "2"

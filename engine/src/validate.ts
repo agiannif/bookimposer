@@ -1,7 +1,8 @@
-import type { BookSpec, Issue } from './types.ts'
+import type { BookSpec, Issue, PrintSettings, Size } from './types.ts'
 
 const positive = (n: number) => Number.isFinite(n) && n > 0
 const nonNegative = (n: number) => Number.isFinite(n) && n >= 0
+export const validSheet = (sheet: Size | undefined): sheet is Size => !!sheet && positive(sheet.width) && positive(sheet.height)
 
 // Degenerate sizes make the slot grid divide by zero (and loop forever) or produce NaN rects,
 // so they are rejected before any layout work.
@@ -16,10 +17,11 @@ export function validateSpec(spec: BookSpec): Issue[] {
     })
   }
 
-  const { sheet, margin, gap, bleed } = spec.print
+  // A spec read from JSON may lack print settings entirely; that is reported, not thrown.
+  const { sheet, margin, gap, bleed } = (spec.print ?? {}) as Partial<PrintSettings>
   const badFields = [
-    ...(positive(sheet.width) && positive(sheet.height) ? [] : ['sheet']),
-    ...Object.entries({ margin, gap, bleed }).flatMap(([name, value]) => (nonNegative(value) ? [] : [name])),
+    ...(validSheet(sheet) ? [] : ['sheet']),
+    ...Object.entries({ margin, gap, bleed }).flatMap(([name, value]) => (nonNegative(value as number) ? [] : [name])),
   ]
   if (badFields.length > 0) {
     issues.push({

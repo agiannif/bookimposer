@@ -33,6 +33,8 @@ export interface SheetSide { placements: PagePlacement[] }
 export interface Sheet { front: SheetSide; back: SheetSide; cutLines: SheetLine[]; foldLines: FoldLine[] }
 /** The imposition of a whole book. On an error issue, `sheets` is empty. */
 export interface Layout {
+  /** The sheet size every side uses. 0x0 on an error layout whose print settings have no valid sheet size. */
+  sheet: Size
   sheets: Sheet[]
   allocations: PartAllocation[]
   body: BodySummary | null

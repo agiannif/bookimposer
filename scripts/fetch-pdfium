@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+# Download the prebuilt PDFium library that crates/pdf-export binds to at runtime.
+#
+# Run this once after cloning, or after the pinned PDFium version changes.
+# `make fetch-pdfium` runs it with the defaults.
+set -euo pipefail
+
+PDFIUM_RELEASE="chromium/8125"
+BASE_URL="https://github.com/bblanchon/pdfium-binaries/releases/download/${PDFIUM_RELEASE}"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# SHA-256 of each platform's archive for PDFIUM_RELEASE. Computed on
+# 2026-11-22 by downloading both archives from BASE_URL with curl and running
+# sha256sum; the linux-x64 value also matches the archive first fetched on
+# 2026-11-21. Update these together with PDFIUM_RELEASE.
+SHA256_LINUX_X64="e1c3ce6e270cb5e0c20816b379ad9f2c1309972697c505f508de92bf5e7d6659"
+SHA256_MAC_UNIV="0cf06803b9a4acc489fc967a1b05990622ca1cf41fa027ff9cc89eeab9b19279"
+
+usage() {
+  cat <<USAGE
+Usage: scripts/fetch-pdfium [--platform linux-x64|mac-univ] [--dest DIR]
+
+Downloads the prebuilt PDFium binary (bblanchon/pdfium-binaries, ${PDFIUM_RELEASE}),
+checks its SHA-256 against the value pinned in this script, and replaces DIR
+with its contents. The pdf-export crate loads the library from DIR/lib
+(or from \$BOOKCOMPOSER_PDFIUM_DIR when set). On any failure DIR is left as it was.
+
+Use it once after cloning, or whenever the pinned PDFium release changes.
+
+Options:
+  --platform P   linux-x64 or mac-univ (default: detected from uname)
+  --dest DIR     extraction directory (default: ${REPO_ROOT}/vendor/pdfium)
+  -h, --help     show this help
+USAGE
+}
+
+fail() {
+  echo "fetch-pdfium: $*" >&2
+  exit 1
+}
+
+detect_platform() {
+  case "$(uname -s)-$(uname -m)" in
+    Linux-x86_64) echo linux-x64 ;;
+    Darwin-*) echo mac-univ ;;
+    *) fail "unsupported host $(uname -s)-$(uname -m); pass --platform linux-x64 or mac-univ" ;;
+  esac
+}
+
+platform=""
+dest="${REPO_ROOT}/vendor/pdfium"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --platform) [[ $# -ge 2 ]] || fail "--platform needs a value"; platform="$2"; shift 2 ;;
+    --dest) [[ $# -ge 2 ]] || fail "--dest needs a value"; dest="$2"; shift 2 ;;
+    -h|--help) usage; exit 0 ;;
+    *) usage >&2; fail "unknown argument: $1" ;;
+  esac
+done
+
+[[ -n "$platform" ]] || platform="$(detect_platform)"
+case "$platform" in
+  linux-x64) lib_name="libpdfium.so"; expected_sha="$SHA256_LINUX_X64" ;;
+  mac-univ) lib_name="libpdfium.dylib"; expected_sha="$SHA256_MAC_UNIV" ;;
+  *) fail "unsupported platform '$platform'; use linux-x64 or mac-univ" ;;
+esac
+
+command -v curl >/dev/null || fail "curl is required"
+command -v tar >/dev/null || fail "tar is required"
+
+url="${BASE_URL}/pdfium-${platform}.tgz"
+download_dir="$(mktemp -d)"
+trap 'rm -rf "$download_dir"' EXIT
+archive="${download_dir}/pdfium-${platform}.tgz"
+
+echo "Downloading ${url}"
+curl --fail --location --silent --show-error --output "$archive" "$url" \
+  || fail "download failed: ${url}"
+
+if command -v sha256sum >/dev/null; then
+  sha="$(sha256sum "$archive" | cut -d' ' -f1)"
+else
+  sha="$(shasum -a 256 "$archive" | cut -d' ' -f1)"
+fi
+
+[[ "$sha" == "$expected_sha" ]] || fail "SHA-256 mismatch for pdfium-${platform}.tgz: expected ${expected_sha}, got ${sha}. The download is corrupt or the release changed; ${dest} was not touched."
+
+# Extract next to dest, so the final moves are renames on one filesystem and
+# dest never holds a partial or mixed tree.
+dest_parent="$(dirname "$dest")"
+mkdir -p "$dest_parent"
+staging="$(mktemp -d "${dest_parent}/.pdfium-staging.XXXXXX")"
+chmod u=rwx,go=rx "$staging"
+trap 'rm -rf "$download_dir" "$staging"' EXIT
+tar -xzf "$archive" -C "$staging" || fail "could not extract ${archive}"
+[[ -f "${staging}/lib/${lib_name}" ]] || fail "archive did not contain lib/${lib_name}"
+
+if [[ -e "$dest" ]]; then
+  old="${staging}.old"
+  mv "$dest" "$old"
+  mv "$staging" "$dest"
+  rm -rf "$old"
+else
+  mv "$staging" "$dest"
+fi
+lib_path="${dest}/lib/${lib_name}"
+
+echo "SHA-256: ${sha} (matches the pinned value)"
+echo "Library: ${lib_path}"

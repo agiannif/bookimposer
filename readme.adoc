@@ -25,11 +25,46 @@ layout.sheets.length // 10
 layout.issues        // [] (errors and warnings, each with a code)
 ----
 
-== Developing
+== Setup
+
+Needs Node (for the engine) and Rust. The exporter loads the PDFium library at runtime; download it once:
 
 [source,sh]
 ----
-cd engine && npm install
-npm test
-npm run typecheck
+make fetch-pdfium
 ----
+
+== Command line
+
+`scripts/impose-pdf` turns a book PDF into a print-ready sheets PDF. Page content is embedded as vector content, never rasterized or re-encoded.
+
+This imposes a 76-page book as a front board, 9 signatures and a back board on US Letter, with cut marks:
+
+[source,sh]
+----
+scripts/impose-pdf --input book.pdf --output sheets.pdf \
+  --signatures 9 --front-board --back-board --sheet letter --margin 18 --cut-marks
+----
+
+Other flags: `--folds 1|2|3`, `--sheet letter|a4|WxH`, `--gap`, `--bleed`, `--duplex long-edge|short-edge`, `--fold-marks` and `--keep-temp DIR` (keeps the intermediate layout JSON). Layout warnings print to stderr; layout errors stop the run. `scripts/impose-pdf --help` lists everything.
+
+A page's trim size is its TrimBox, or its CropBox when it has none, or its MediaBox.
+
+Not carried over (yet): annotations and form fields. A warning names each page that has any.
+
+== Developing
+
+`make` lists every dev task. The PDF export crate (`crates/pdf-export`) needs Rust and the PDFium library, which `make fetch-pdfium` downloads into `vendor/pdfium/`.
+
+[source,sh]
+----
+(cd engine && npm install)
+make fetch-pdfium
+make test        # engine and pdf-export tests
+make e2e         # end-to-end impose-pdf test
+make release     # release export binary
+make typecheck   # engine
+make lint        # rustfmt and clippy
+----
+
+The Makefile expects the Rust toolchain in `RUSTUP_BIN` (default `/home/linuxbrew/.linuxbrew/opt/rustup/bin`) and loads PDFium from `BOOKCOMPOSER_PDFIUM_DIR` (default `vendor/pdfium/lib`); override either on the command line, e.g. `make test RUSTUP_BIN=~/.cargo/bin`.

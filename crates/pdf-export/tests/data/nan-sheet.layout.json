@@ -1,0 +1,1 @@
+{"sheet":{"width":0,"height":0},"sheets":[],"allocations":[],"body":null,"perSheet":[],"fillers":{"count":0,"size":{"width":0,"height":0}},"issues":[{"code":"invalid-print-settings","severity":"error","message":"Invalid print settings: sheet. The sheet size must be finite and greater than 0; margin, gap and bleed must be finite and at least 0."}]}
