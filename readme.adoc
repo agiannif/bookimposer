@@ -1,0 +1,35 @@
+= bookcomposer
+
+A book and zine imposition tool. The engine is a pure TypeScript layout library (no UI, no PDF) that works out where each source page lands on each printed sheet.
+
+Status: in development.
+
+== Using the engine
+
+`impose()` takes the PDF's page sizes, the book's parts and the print settings, and returns a `Layout`: where every page lands on each side of each sheet, plus cut and fold lines. All sizes are PDF points.
+
+This is a 76-page PDF of 4 x 5.25 inch pages, bound as a front board, 9 folio signatures and a back board, printed on US Letter:
+
+[source,ts]
+----
+import { impose } from './engine/src/index.ts'
+
+const layout = impose({
+  pageSizes: Array.from({ length: 76 }, () => ({ width: 288, height: 378 })),
+  parts: [{ type: 'board' }, { type: 'body', signatures: 9, folds: 1 }, { type: 'board' }],
+  print: { sheet: { width: 612, height: 792 }, duplex: 'long-edge', margin: 18, gap: 0, bleed: 0 },
+  mismatch: 'fit',
+})
+
+layout.sheets.length // 10
+layout.issues        // [] (errors and warnings, each with a code)
+----
+
+== Developing
+
+[source,sh]
+----
+cd engine && npm install
+npm test
+npm run typecheck
+----
