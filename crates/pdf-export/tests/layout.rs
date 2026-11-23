@@ -9,15 +9,17 @@ fn parses_the_engine_worked_example() {
     let layout: Layout = layout::parse(WORKED_EXAMPLE).unwrap();
     assert_eq!(layout.sheet.width, 612.0);
     assert_eq!(layout.sheet.height, 792.0);
-    assert_eq!(layout.sheets.len(), 10);
-    assert_eq!(layout.fillers.count, 2);
+    assert_eq!(layout.sheets.len(), 11);
     assert!(layout.issues.is_empty());
+    let body = layout.body.as_ref().unwrap();
+    assert_eq!((body.body_pages, body.blanks_added), (76, 4));
+    assert_eq!((body.leaf_pages.before, body.leaf_pages.after), (2, 2));
     let first = &layout.sheets[0].front.placements[0];
-    assert_eq!(first.pdf_page, Some(9));
+    assert_eq!((first.pdf_page, first.part_page), (Some(7), 7));
     assert_eq!(first.panel.width, 288.0);
     assert_eq!(first.rotation, 0);
-    assert!(layout.sheets[9].back.placements.is_empty());
-    assert_eq!(layout.sheets[0].fold_lines.len(), 2);
+    assert!(layout.sheets[10].back.placements.is_empty());
+    assert_eq!(layout.sheets[0].front.guides.fold.len(), 2);
 }
 
 #[test]
@@ -29,12 +31,13 @@ fn round_trips_through_serde() {
 
 #[test]
 fn parses_a_blank_panel_and_issue_data() {
-    let json = WORKED_EXAMPLE.replacen("\"pdfPage\":9", "\"pdfPage\":null", 1);
+    let json = WORKED_EXAMPLE.replacen("\"pdfPage\":7", "\"pdfPage\":null", 1);
     let layout = layout::parse(&json).unwrap();
     assert_eq!(layout.sheets[0].front.placements[0].pdf_page, None);
 
     let json = r#"{"sheet":{"width":1,"height":1},"sheets":[],"allocations":[],"body":null,
-        "perSheet":[],"fillers":{"count":0,"size":{"width":0,"height":0}},
+        "perSheet":[],
+        "markStyle":{"strokeWidth":0.25,"dash":{"spine":[3,2],"opensByTrim":[0.5,1.5]}},
         "issues":[{"code":"piece-does-not-fit","severity":"error","message":"m","data":{"width":3}}]}"#;
     let layout = layout::parse(json).unwrap();
     assert_eq!(layout.issues[0].data.as_ref().unwrap()["width"], 3);

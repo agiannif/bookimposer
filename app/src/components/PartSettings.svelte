@@ -5,8 +5,7 @@
   import FoldsField from "./FoldsField.svelte";
   import NumberField from "./NumberField.svelte";
 
-  /** `fillerNote` says what to cut for the boards' fillers; null when there are no boards. */
-  let { ws, part, derived, fillerNote }: { ws: BookWorkspace; part: BookPart; derived: DerivedNumbers; fillerNote: string | null } = $props();
+  let { ws, part, derived }: { ws: BookWorkspace; part: BookPart; derived: DerivedNumbers } = $props();
 
   const rows: { label: string; key: keyof DerivedNumbers; testid: string }[] = [
     { label: "Pages per signature", key: "pagesPerSignature", testid: "derived-pages-per-signature" },
@@ -35,15 +34,14 @@
       {/each}
     </dl>
   {:else}
-    <p class="hint">A board takes 2 pages of the PDF and has no settings of its own.</p>
-    {#if fillerNote}<p data-testid="filler-note">{fillerNote}</p>{/if}
+    <p class="hint">A board takes 2 pages: the cover and the inside cover. It wraps the blank first (or last) leaf of the book block and is glued to both sides.</p>
   {/if}
 </section>
 
 <style>
   .suggest {
     padding: var(--space-1) var(--space-2);
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   dl {
     margin: 0;

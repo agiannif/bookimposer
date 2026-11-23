@@ -44,7 +44,7 @@ test("a saved project reopens with the same PDF into the workspace without warni
   await expect(page.getByText("Choose book-76.pdf to continue")).toBeVisible();
   await page.getByTestId("choose-pdf").setInputFiles(BOOK_76);
   await expect(page.getByTestId("export-pdf")).toBeVisible({ timeout: FIRST_BUILD_MS });
-  await expect(page.getByTestId("signatures")).toHaveValue("9");
+  await expect(page.getByTestId("signatures")).toHaveValue("10");
   await expect(page.getByTestId("part-item")).toHaveCount(3);
   await expect(page.getByTestId("allocation-segment")).toContainText(["1–2", "3–74", "75–76"]);
   await expect(page.getByTestId("project-warning")).toHaveCount(0);
@@ -63,12 +63,12 @@ test("choosing a different PDF shows both warnings, which can be dismissed, and 
     "This PDF is different from the one saved with the project",
     "It has 74 pages, the project expects 76",
   ]);
-  // The saved settings still lay out: 70 body pages in 9 signatures of 8 pad 2 blanks, which the
-  // engine doesn't flag, so there is no issue banner and export stays on.
-  await expect(page.getByTestId("signatures")).toHaveValue("9");
+  // The saved settings still lay out: 70 PDF pages and the two blank leaves make 74 body pages, which 10
+  // signatures of 8 pad with 6 blanks. The engine doesn't flag that, so there is no issue banner and export stays on.
+  await expect(page.getByTestId("signatures")).toHaveValue("10");
   await expect(page.getByTestId("allocation-segment")).toContainText(["1–2", "3–72", "73–74"]);
-  await expect(page.getByTestId("allocation-segment").nth(1)).toContainText("+2 blank");
-  await expect(page.getByTestId("derived-blanks-added")).toHaveText("2");
+  await expect(page.getByTestId("allocation-segment").nth(1)).toContainText("+6 blank");
+  await expect(page.getByTestId("derived-blanks-added")).toHaveText("6");
   await expect(page.locator("[data-testid=issue-error], [data-testid=issue-warning]")).toHaveCount(0);
   await expect(page.getByTestId("export-pdf")).toBeEnabled();
   await page.getByTestId("dismiss-warnings").click();
@@ -110,7 +110,7 @@ test("a project that can't be saved shows why and the workspace stays usable", a
   const errors = await openWithBoards(page);
   await page.getByTestId("save-project").click();
   await expect(page.getByTestId("save-error")).toHaveText("Could not save the project: disk full");
-  await page.getByTestId("signatures").fill("18");
+  await page.getByTestId("signatures").fill("19");
   await expect(page.getByTestId("derived-pages-per-signature")).toHaveText("4");
   expect(errors).toEqual([]);
 });

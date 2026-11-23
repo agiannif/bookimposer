@@ -100,3 +100,20 @@ test('issues CLI is silent for a clean layout', () => {
   assert.equal(result.status, 0)
   assert.equal(result.stderr.toString(), '')
 })
+
+test('issues CLI shows a no-room-for-marks warning only for the mark flags given', () => {
+  const issue = (cut: boolean, fold: boolean, message: string) => ({ code: 'no-room-for-marks', severity: 'warning', message, data: { sheet: 0, cut, fold } })
+  const layout = { issues: [issue(true, false, 'no cut room'), issue(false, true, 'no fold room')] }
+  const run = (...flags: string[]) => spawnSync('node', [issuesCli, ...flags], { input: JSON.stringify(layout) })
+  assert.equal(run().stderr.toString(), '')
+  assert.equal(run('--cut-marks').stderr.toString(), 'warning: no cut room\n')
+  assert.equal(run('--fold-marks').stderr.toString(), 'warning: no fold room\n')
+  assert.equal(run('--cut-marks', '--fold-marks').stderr.toString(), 'warning: no cut room\nwarning: no fold room\n')
+  assert.equal(run().status, 0)
+})
+
+test('issues CLI rejects an unknown flag', () => {
+  const result = spawnSync('node', [issuesCli, '--bogus'], { input: JSON.stringify({ issues: [] }) })
+  assert.equal(result.status, 2)
+  assert.match(result.stderr.toString(), /issues: unknown flag --bogus/)
+})

@@ -165,3 +165,25 @@ fn truncated_pdf_is_not_a_pdf_or_damaged() {
     assert!(matches!(error, ExportError::NotAPdf), "{error:?}");
     assert_eq!(error.to_string(), "not a PDF or the file is damaged");
 }
+
+/// PDFium keeps one last-error code for the whole process. Loads on other
+/// threads must not change why this load failed.
+#[test]
+fn concurrent_failed_loads_each_report_their_own_reason() {
+    let encrypted: &[u8] = include_bytes!("data/encrypted.pdf");
+    std::thread::scope(|scope| {
+        for thread in 0..8 {
+            scope.spawn(move || {
+                for i in 0..200 {
+                    if (thread + i) % 2 == 0 {
+                        let error = page_sizes(pdfium(), b"hello").unwrap_err();
+                        assert!(matches!(error, ExportError::NotAPdf), "{error:?}");
+                    } else {
+                        let error = page_sizes(pdfium(), encrypted).unwrap_err();
+                        assert!(matches!(error, ExportError::PasswordProtected), "{error:?}");
+                    }
+                }
+            });
+        }
+    });
+}

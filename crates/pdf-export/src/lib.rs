@@ -124,9 +124,17 @@ pub fn page_sizes_json(boxes: &[PageBoxes]) -> serde_json::Value {
     serde_json::json!({"pageSizes": sizes, "boxes": boxes})
 }
 
+/// Held while a PDF loads. PDFium reports why a load failed through one
+/// process-wide last-error code, read after the load, so a load on another
+/// thread in between would change the reason.
+static LOADING: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 /// Opens the PDF in `source`, reporting a non-PDF or damaged input as
 /// `NotAPdf` and one that needs a password as `PasswordProtected`.
 fn load_pdf<'a>(pdfium: &'a Pdfium, source: &'a [u8]) -> Result<PdfDocument<'a>, ExportError> {
+    let _loading = LOADING
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     pdfium
         .load_pdf_from_byte_slice(source, None)
         .map_err(|error| match error {

@@ -4,17 +4,18 @@ import { allocatePages } from './allocate.ts'
 import { validateSpec, validSheet } from './validate.ts'
 import { fitPieces, pieceSize } from './fit.ts'
 import type { SlotFit } from './fit.ts'
+import { MARK_STYLE, sheetMarks } from './marks.ts'
 import { boardPiece, bodyPieces } from './pieces.ts'
 import type { PanelAssignment, Piece } from './pieces.ts'
 import type { Rect, Rotation } from './geometry.ts'
-import type { BookSpec, DuplexFlip, MismatchPolicy, FoldLine, Issue, Layout, PagePlacement, Sheet, SheetLine, SheetSide, Size } from './types.ts'
+import type { BookSpec, DuplexFlip, MismatchPolicy, FoldLine, Issue, Layout, PagePlacement, Sheet, SheetLine, SideMarks, Size } from './types.ts'
 
 // An unusable sheet size (missing, NaN, infinite, not positive) becomes 0x0 so the JSON stays readable.
 const emptyLayout = (
   rawSheet: Size | undefined, issues: Issue[], allocations: Layout['allocations'] = [], body: Layout['body'] = null,
 ): Layout => ({
   sheet: validSheet(rawSheet) ? rawSheet : { width: 0, height: 0 },
-  sheets: [], allocations, body, perSheet: [], fillers: { count: 0, size: { width: 0, height: 0 } }, issues,
+  sheets: [], allocations, body, perSheet: [], issues, markStyle: MARK_STYLE,
 })
 
 interface Group { cols: number; rows: number; pieces: Piece[] }
@@ -69,6 +70,7 @@ function placementsOf(
     return {
       pdfPage: cell.pdfPage,
       partIndex: piece.partIndex,
+      partPage: cell.partPage,
       panel: rect,
       content,
       clip,
@@ -90,20 +92,33 @@ const sameLine = (a: SheetLine, b: SheetLine) =>
   Math.abs(a.x1 - b.x1) < LINE_TOLERANCE && Math.abs(a.y1 - b.y1) < LINE_TOLERANCE
   && Math.abs(a.x2 - b.x2) < LINE_TOLERANCE && Math.abs(a.y2 - b.y2) < LINE_TOLERANCE
 
+// Maps a point on the front to the point behind it, as seen looking at the back. A vertical flip axis
+// mirrors x; a horizontal one (long edge on a landscape sheet, short edge on a portrait one) also turns
+// the whole back 180 degrees, which mirrors y instead.
+function behindFront(sheet: Size, duplex: DuplexFlip): Affine {
+  const verticalAxis = (duplex === 'long-edge') === (sheet.height >= sheet.width)
+  const mirrored = mirrorX(sheet.width)
+  return verticalAxis ? mirrored : compose(rotateCw(180, sheet.width, sheet.height), mirrored)
+}
+
+function linesBehind(lines: SideMarks, flip: Affine): SideMarks {
+  const behind = (l: SheetLine) => sheetLine(flip, l.x1, l.y1, l.x2, l.y2)
+  return { cut: lines.cut.map(behind), fold: lines.fold.map((f) => ({ ...behind(f), opensByTrim: f.opensByTrim })) }
+}
+
 function buildSheet(pieces: Piece[], fit: SlotFit, size: Size, panel: Size, spec: BookSpec): Sheet {
   const { sheet: sheetSize, duplex, bleed } = spec.print
-  const front: SheetSide = { placements: [] }
-  const back: SheetSide = { placements: [] }
+  const frontPlacements: PagePlacement[] = []
+  const backPlacements: PagePlacement[] = []
   const cutLines: SheetLine[] = []
   const foldLines: FoldLine[] = []
-  // A horizontal flip axis (long edge on a landscape sheet, short edge on a portrait one) turns the whole back side 180 degrees.
-  const verticalAxis = (duplex === 'long-edge') === (sheetSize.height >= sheetSize.width)
+  const flip = behindFront(sheetSize, duplex)
   pieces.forEach((piece, i) => {
     const slot = fit.slots[i]
     const { width: pw, height: ph } = size
     const frontTransform = compose(translate(slot.x, slot.y), fit.rotated ? rotateCw(90, pw, ph) : identity())
-    const canonicalBack = compose(mirrorX(sheetSize.width), compose(frontTransform, mirrorX(pw)))
-    const backTransform = verticalAxis ? canonicalBack : compose(rotateCw(180, sheetSize.width, sheetSize.height), canonicalBack)
+    // The piece seen from behind is its front mirrored within the piece, then moved behind the front.
+    const backTransform = compose(flip, compose(frontTransform, mirrorX(pw)))
     const trim = { x1: bleed, y1: bleed, x2: bleed + piece.cols * panel.width, y2: bleed + piece.rows * panel.height }
     const edges = [
       sheetLine(frontTransform, trim.x1, trim.y1, trim.x2, trim.y1),
@@ -119,10 +134,31 @@ function buildSheet(pieces: Piece[], fit: SlotFit, size: Size, panel: Size, spec
         : sheetLine(frontTransform, trim.x1, bleed + fold.index * panel.height, trim.x2, bleed + fold.index * panel.height)
       foldLines.push({ ...line, opensByTrim: fold.opensByTrim })
     }
-    front.placements.push(...placementsOf(piece.front, piece, frontTransform, panel, bleed, spec))
-    back.placements.push(...placementsOf(piece.back, piece, backTransform, panel, bleed, spec))
+    frontPlacements.push(...placementsOf(piece.front, piece, frontTransform, panel, bleed, spec))
+    backPlacements.push(...placementsOf(piece.back, piece, backTransform, panel, bleed, spec))
   })
-  return { front, back, cutLines, foldLines }
+  // Ticks are placed against the front's clips: every piece has front placements, while board backs have none.
+  const frontMarks = sheetMarks(cutLines, foldLines, frontPlacements.map((p) => p.clip), sheetSize)
+  const frontGuides = { cut: cutLines, fold: foldLines }
+  return {
+    front: { placements: frontPlacements, guides: frontGuides, marks: frontMarks },
+    back: { placements: backPlacements, guides: linesBehind(frontGuides, flip), marks: linesBehind(frontMarks, flip) },
+  }
+}
+
+// A warning for each sheet where a kind of line got no ticks at all.
+function noRoomForMarks(sheets: Sheet[]): Issue[] {
+  return sheets.flatMap((sheet, index): Issue[] => {
+    const { guides, marks } = sheet.front
+    const cut = guides.cut.length > 0 && marks.cut.length === 0
+    const fold = guides.fold.length > 0 && marks.fold.length === 0
+    if (!cut && !fold) return []
+    return [{
+      code: 'no-room-for-marks', severity: 'warning',
+      message: `Cut/fold marks would overlap page content on sheet ${index + 1}.`,
+      data: { sheet: index, cut, fold },
+    }]
+  })
 }
 
 export function impose(spec: BookSpec): Layout {
@@ -135,8 +171,9 @@ export function impose(spec: BookSpec): Layout {
   const bodyIndex = allocations.findIndex((a) => a.type === 'body')
   const bodyPart = spec.parts[bodyIndex]
   if (bodyPart.type !== 'body') throw new Error('unreachable')
-  const firstBodyPage = allocations[bodyIndex].pdfPages[0]
-  if (firstBodyPage === null) throw new Error('body starts with a blank page')
+  // The panel takes the size of the body's first PDF page; the front board's blank leaf may come before it.
+  const firstBodyPage = allocations[bodyIndex].pdfPages.find((p): p is number => p !== null)
+  if (firstBodyPage === undefined) throw new Error('body has no PDF pages')
   const panel = spec.pageSizes[firstBodyPage]
   const { bleed } = spec.print
 
@@ -188,5 +225,6 @@ export function impose(spec: BookSpec): Layout {
       sheets: count,
     })
   }
-  return { sheet: spec.print.sheet, sheets, allocations, body, perSheet, fillers: { count: boards.length, size: panel }, issues }
+  issues.push(...noRoomForMarks(sheets))
+  return { sheet: spec.print.sheet, sheets, allocations, body, perSheet, issues, markStyle: MARK_STYLE }
 }

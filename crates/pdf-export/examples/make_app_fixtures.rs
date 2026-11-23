@@ -2,7 +2,7 @@
 //! Run it with `make app-fixtures`; the app's e2e tests load the results.
 //!
 //! The PDFs are built by the same fixture builders the crate's tests use:
-//! 288x378 pages labelled 1 to N, each with a background colour derived from
+//! pages (288x378 unless noted) labelled 1 to N, each with a background colour derived from
 //! its label.
 
 #[path = "../tests/support/mod.rs"]
@@ -44,6 +44,19 @@ fn trimmed_book(pdfium: &Pdfium) -> Vec<u8> {
     fixture_pdf(pdfium, &pages)
 }
 
+/// 76 labelled landscape pages of 378x288, which turn a quarter on a letter sheet.
+fn landscape_book(pdfium: &Pdfium) -> Vec<u8> {
+    let pages: Vec<FixturePage> = (1..=76)
+        .map(|label| FixturePage {
+            media: (0.0, 0.0, 378.0, 288.0),
+            trim: None,
+            bleed: None,
+            label,
+        })
+        .collect();
+    fixture_pdf(pdfium, &pages)
+}
+
 fn main() {
     let Some(dir) = std::env::args_os().nth(1).map(PathBuf::from) else {
         eprintln!("usage: make_app_fixtures <output-dir>");
@@ -69,6 +82,7 @@ fn main() {
         ("mixed-8.pdf", mixed_book(pdfium)),
         // 306x396 pages with a TrimBox inset 9 pt on every side.
         ("trimmed-8.pdf", trimmed_book(pdfium)),
+        ("landscape-76.pdf", landscape_book(pdfium)),
     ];
     for (name, bytes) in fixtures {
         let path = dir.join(name);

@@ -35,7 +35,7 @@
   <button type="button" class="primary" disabled={ws.hasErrors || busy} onclick={exportPdf} data-testid="export-pdf">Export PDF</button>
 
   {#if error || warnings.length}
-    <div class="notice" class:failed={error} role={error ? "alert" : "status"}>
+    <div class={["notice", error ? "error" : "warning"]} role={error ? "alert" : "status"}>
       {#if error}
         <p data-testid="export-error">{error}</p>
       {:else}
@@ -55,6 +55,7 @@
     align-items: center;
     gap: var(--space-2);
   }
+  /* Floats over the page below the header, so it needs an opaque surface but no shadow. */
   .notice {
     position: absolute;
     top: calc(100% + var(--space-2));
@@ -62,23 +63,5 @@
     z-index: 1;
     width: max-content;
     max-width: 480px;
-    box-shadow: 0 4px 16px rgb(0 0 0 / 0.12);
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: var(--space-3);
-    padding: var(--space-2) var(--space-3);
-    background: var(--warning-soft);
-    color: var(--warning);
-    border-radius: var(--radius);
-  }
-  .notice.failed {
-    background: var(--error-soft);
-    color: var(--error);
-  }
-  ul, p {
-    list-style: none;
-    padding: 0;
-    margin: 0;
   }
 </style>

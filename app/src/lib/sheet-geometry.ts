@@ -1,5 +1,5 @@
 // Maps a Layout's sheet points onto the screen. Pure, so the sheet view only draws what it returns.
-import type { PagePlacement, Rect, Rotation, Size } from "../../../engine/src/index.ts";
+import type { MarkStyle, PagePlacement, Rect, Rotation, Sheet, SideMarks, Size } from "../../../engine/src/index.ts";
 import type { PageBoxes } from "./backend.ts";
 
 /** Screen = offset + scale × sheet point. Both axes share the scale, so nothing is distorted. */
@@ -128,4 +128,70 @@ export function imageRectForPlacement(
 /** The width in device pixels the page's rendered image is shown at, sheet scaled by `scale` CSS px per point. */
 export function thumbnailWidth(p: PagePlacement, boxes: PageBoxes, scale: number, devicePixelRatio: number): number {
   return imageRectForPlacement(p, boxes).width * scale * devicePixelRatio;
+}
+
+/** A mark as the exporter strokes it, in sheet points; `dash` is the on and off lengths, null for solid. */
+export interface MarkStroke { kind: "cut" | "fold"; x1: number; y1: number; x2: number; y2: number; dash: readonly number[] | null }
+
+/** The side's marks the export draws with these options, dashed as `style` (the Layout's) says: cut ticks solid. */
+export function markStrokes(marks: SideMarks, shown: { cut: boolean; fold: boolean }, style: MarkStyle): MarkStroke[] {
+  const cut = shown.cut ? marks.cut.map(({ x1, y1, x2, y2 }): MarkStroke => ({ kind: "cut", x1, y1, x2, y2, dash: null })) : [];
+  const fold = shown.fold
+    ? marks.fold.map(({ x1, y1, x2, y2, opensByTrim }): MarkStroke => ({
+        kind: "fold", x1, y1, x2, y2, dash: opensByTrim ? style.dash.opensByTrim : style.dash.spine,
+      }))
+    : [];
+  return [...cut, ...fold];
+}
+
+/** The rotation of the view that makes the most pages read upright; blank panels don't count, ties keep 0. */
+export function defaultViewRotation(placements: readonly PagePlacement[]): Rotation {
+  const upright = new Map<Rotation, number>();
+  for (const p of placements) {
+    if (p.pdfPage === null) continue;
+    const view = ((360 - p.rotation) % 360) as Rotation;
+    upright.set(view, (upright.get(view) ?? 0) + 1);
+  }
+  let best: Rotation = 0;
+  for (const view of [90, 180, 270] as const) {
+    if ((upright.get(view) ?? 0) > (upright.get(best) ?? 0)) best = view;
+  }
+  return best;
+}
+
+/**
+ * Each side's view rotation: the one that reads that side's pages (over all sheets) upright, plus `turn`,
+ * the user's shared extra turn. The sides can differ: a duplex flip can turn the back's pages a half.
+ */
+export function sideViews(sheets: readonly Sheet[], turn: Rotation): { front: Rotation; back: Rotation } {
+  const view = (side: "front" | "back") =>
+    ((defaultViewRotation(sheets.flatMap((s) => s[side].placements)) + turn) % 360) as Rotation;
+  return { front: view("front"), back: view("back") };
+}
+
+/** The sheet's size as shown with the view turned `view` degrees: width and height swap on a quarter turn. */
+export function viewSize(sheet: Size, view: Rotation): Size {
+  return view === 90 || view === 270 ? { width: sheet.height, height: sheet.width } : sheet;
+}
+
+/** SVG transform turning the sheet's drawing `view` degrees clockwise into the `viewSize` box; undefined for 0. */
+export function viewTransform(sheet: Size, view: Rotation): string | undefined {
+  switch (view) {
+    case 90: return `translate(${sheet.height} 0) rotate(90)`;
+    case 180: return `translate(${sheet.width} ${sheet.height}) rotate(180)`;
+    case 270: return `translate(0 ${sheet.width}) rotate(270)`;
+    default: return undefined;
+  }
+}
+
+/** The panel's corner, in sheet points, that shows at the top left once the view is turned `view` degrees. */
+export function badgeAnchor(panel: Rect, view: Rotation): { x: number; y: number } {
+  const right = panel.x + panel.width;
+  const bottom = panel.y + panel.height;
+  switch (view) {
+    case 90: return { x: panel.x, y: bottom };
+    case 180: return { x: right, y: bottom };
+    case 270: return { x: right, y: panel.y };
+    default: return { x: panel.x, y: panel.y };
+  }
 }

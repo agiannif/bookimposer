@@ -21,6 +21,7 @@
       if (project) {
         const saved = project;
         await ws.open(file, backend, saved.settings, (chosen) => pdfWarnings(saved.pdf, chosen));
+        ws.unit = saved.unit;
         screen = "workspace";
       } else {
         await ws.open(file, backend);

@@ -16,6 +16,7 @@ background colour derived from that label.
 | `rotated-8.pdf` | `book-8.pdf` with `/Rotate 90` on page 2 |
 | `mixed-8.pdf` | 8 pages, all 288x378 except page 3, which is 300x400 |
 | `trimmed-8.pdf` | 8 pages of 306x396 with a 288x378 TrimBox inset 9 pt on every side |
+| `landscape-76.pdf` | 76 landscape pages of 378x288 |
 
 PDFium stamps a creation date and file ID on save, so regenerating changes the
 bytes even when the content is the same.

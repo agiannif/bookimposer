@@ -25,7 +25,7 @@ test('the second piece sits below the first', () => {
 })
 
 test('cut lines are the trim edges of each piece', () => {
-  const { cutLines } = bleedLayout().sheets[0]
+  const { cut: cutLines } = bleedLayout().sheets[0].front.guides
   assert.equal(cutLines.length, 8)
   assert.deepEqual(cutLines.slice(0, 4), [
     { x1: 62, y1: 63, x2: 638, y2: 63 },
@@ -36,7 +36,7 @@ test('cut lines are the trim edges of each piece', () => {
 })
 
 test('fold lines cross the trim rect and carry opensByTrim', () => {
-  const { foldLines } = bleedLayout().sheets[0]
+  const { fold: foldLines } = bleedLayout().sheets[0].front.guides
   assert.equal(foldLines.length, 2)
   assert.deepEqual(foldLines[0], { x1: 350, y1: 63, x2: 350, y2: 441, opensByTrim: false })
 })
@@ -47,7 +47,7 @@ test('two folds give a horizontal fold that opens by trim and a vertical spine',
     parts: [{ type: 'body', signatures: 1, folds: 2 }],
     print: { sheet: { width: 700, height: 900 }, duplex: 'long-edge', margin: 10, gap: 0, bleed: 0 },
   }))
-  const { foldLines } = layout.sheets[0]
+  const { fold: foldLines } = layout.sheets[0].front.guides
   assert.equal(foldLines.length, 2)
   const horizontal = foldLines.filter((l) => l.y1 === l.y2)
   const vertical = foldLines.filter((l) => l.x1 === l.x2)
@@ -75,13 +75,13 @@ test('rotated clips grow on the rotated outer edges', () => {
   const { front, back } = layout.sheets[0]
   const page8 = front.placements.find((p) => p.pdfPage === 7)!
   assert.equal(page8.rotation, 90)
-  assert.deepEqual(page8.panel, { x: 63, y: 62, width: 378, height: 288 })
-  assert.deepEqual(page8.clip, { x: 54, y: 53, width: 396, height: 297 })
+  assert.deepEqual(page8.panel, { x: 459, y: 62, width: 378, height: 288 })
+  assert.deepEqual(page8.clip, { x: 450, y: 53, width: 396, height: 297 })
   const page1 = front.placements.find((p) => p.pdfPage === 0)!
-  assert.deepEqual(page1.clip, { x: 54, y: 350, width: 396, height: 297 })
+  assert.deepEqual(page1.clip, { x: 450, y: 350, width: 396, height: 297 })
   // Long-edge on a landscape sheet mirrors y, so page 2 (behind page 1) is at the top of the back.
   const page2 = back.placements.find((p) => p.pdfPage === 1)!
   assert.equal(page2.rotation, 90)
-  assert.deepEqual(page2.panel, { x: 63, y: 62, width: 378, height: 288 })
-  assert.deepEqual(page2.clip, { x: 54, y: 53, width: 396, height: 297 })
+  assert.deepEqual(page2.panel, { x: 459, y: 62, width: 378, height: 288 })
+  assert.deepEqual(page2.clip, { x: 450, y: 53, width: 396, height: 297 })
 })

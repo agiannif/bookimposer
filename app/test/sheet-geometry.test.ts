@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { impose, type PagePlacement } from "../../engine/src/index.ts";
 import { workedExample } from "../../engine/test/fixtures.ts";
 import type { PageBoxes } from "../src/lib/backend.ts";
-import { fittedStage, imageRectForPlacement, placementSvg, sheetTransform, sidesLayout, thumbnailWidth } from "../src/lib/sheet-geometry.ts";
+import { badgeAnchor, defaultViewRotation, sideViews, fittedStage, imageRectForPlacement, markStrokes, placementSvg, sheetTransform, sidesLayout, thumbnailWidth, viewSize, viewTransform } from "../src/lib/sheet-geometry.ts";
 
 const unit = { scale: 1, offsetX: 0, offsetY: 0 };
 
@@ -42,7 +42,7 @@ test("sheetTransform has scale 0 when nothing can be shown", () => {
 });
 
 test("placementSvg puts the worked example's first page where the engine placed it", () => {
-  const placement = impose(workedExample()).sheets[0]!.front.placements.find((p) => p.pdfPage === 9)!;
+  const placement = impose(workedExample()).sheets[0]!.front.placements.find((p) => p.pdfPage === 7)!;
   assert.deepEqual(placementSvg(placement, unit), {
     x: 18,
     y: 18,
@@ -75,6 +75,7 @@ test("placementSvg scales and offsets everything by the transform", () => {
   const placement: PagePlacement = {
     pdfPage: 0,
     partIndex: 0,
+    partPage: 0,
     panel: { x: 10, y: 20, width: 100, height: 200 },
     content: { x: 10, y: 20, width: 100, height: 200 },
     clip: { x: 5, y: 15, width: 110, height: 210 },
@@ -102,11 +103,11 @@ const plain = boxes([288, 378], { left: 0, bottom: 0, width: 288, height: 378 })
 const inset = boxes([306, 396], { left: 9, bottom: 9, width: 288, height: 378 });
 
 function placement(content: { x: number; y: number; width: number; height: number }, rotation: PagePlacement["rotation"] = 0): PagePlacement {
-  return { pdfPage: 0, partIndex: 0, panel: content, content, clip: content, rotation };
+  return { pdfPage: 0, partIndex: 0, partPage: 0, panel: content, content, clip: content, rotation };
 }
 
 test("imageRectForPlacement: with the trim equal to the crop, the image is the content", () => {
-  const p = impose(workedExample()).sheets[0]!.front.placements.find((p) => p.pdfPage === 9)!;
+  const p = impose(workedExample()).sheets[0]!.front.placements.find((p) => p.pdfPage === 7)!;
   assert.deepEqual(imageRectForPlacement(p, plain), { x: 18, y: 18, width: 288, height: 378, rotation: 0 });
 });
 
@@ -182,4 +183,94 @@ test("fittedStage shrinks a box to the sheet it fits plus the padding, at the sa
   assert.deepEqual(stage, { width: 300, height: 792 * scale + 32 });
   assert.equal(sheetTransform(letter, stage).scale, scale);
   assert.deepEqual(fittedStage({ width: 0, height: 0 }, { width: 300, height: 300 }), { width: 300, height: 300 });
+});
+
+test("markStrokes gives each mark the Layout style's dash: cut solid, spine and trim folds their own", () => {
+  // Not the engine's style, so only reading it from the argument gives these dashes.
+  const style = { strokeWidth: 1, dash: { spine: [7, 1], opensByTrim: [4, 4.5] } };
+  const marks = {
+    cut: [{ x1: 4, y1: 18, x2: 16, y2: 18 }],
+    fold: [{ x1: 306, y1: 4, x2: 306, y2: 16, opensByTrim: false }, { x1: 10, y1: 4, x2: 10, y2: 16, opensByTrim: true }],
+  };
+  assert.deepEqual(markStrokes(marks, { cut: true, fold: true }, style), [
+    { kind: "cut", x1: 4, y1: 18, x2: 16, y2: 18, dash: null },
+    { kind: "fold", x1: 306, y1: 4, x2: 306, y2: 16, dash: [7, 1] },
+    { kind: "fold", x1: 10, y1: 4, x2: 10, y2: 16, dash: [4, 4.5] },
+  ]);
+  assert.deepEqual(markStrokes(marks, { cut: false, fold: true }, style).map((m) => m.kind), ["fold", "fold"]);
+  assert.deepEqual(markStrokes(marks, { cut: true, fold: false }, style).map((m) => m.kind), ["cut"]);
+  assert.deepEqual(markStrokes(marks, { cut: false, fold: false }, style), []);
+});
+
+test("markStrokes draws a side's marks from the Layout as they are", () => {
+  const layout = impose(workedExample());
+  const back = layout.sheets[0].back.marks;
+  const strokes = markStrokes(back, { cut: true, fold: true }, layout.markStyle);
+  assert.equal(strokes.length, back.cut.length + back.fold.length);
+  assert.deepEqual(strokes.map(({ x1, y1, x2, y2 }) => ({ x1, y1, x2, y2 })), [...back.cut, ...back.fold].map(({ x1, y1, x2, y2 }) => ({ x1, y1, x2, y2 })));
+});
+
+const allPlacements = (layout: ReturnType<typeof impose>) => layout.sheets.flatMap((s) => [...s.front.placements, ...s.back.placements]);
+
+test("defaultViewRotation is 0 for the worked example, whose pages are all upright", () => {
+  assert.equal(defaultViewRotation(allPlacements(impose(workedExample()))), 0);
+});
+
+test("defaultViewRotation turns a landscape sheet's quarter-turned pages upright", () => {
+  const placements = allPlacements(landscape());
+  assert.ok(placements.every((p) => p.rotation === 90));
+  assert.equal(defaultViewRotation(placements), 270);
+});
+
+test("defaultViewRotation on a quarto sheet: half the pages at 180 and half at 0 tie, so the view stays 0", () => {
+  const quarto = impose(workedExample({ parts: [{ type: "body", signatures: 1, folds: 2 }] }));
+  const placements = quarto.sheets[0]!.front.placements;
+  assert.equal(placements.filter((p) => p.rotation === 180).length, placements.filter((p) => p.rotation === 0).length);
+  assert.equal(defaultViewRotation(placements), 0);
+});
+
+test("defaultViewRotation follows the majority and ignores blank panels", () => {
+  const at = (rotation: PagePlacement["rotation"], pdfPage: number | null) => ({ ...landscape().sheets[0]!.front.placements[0]!, rotation, pdfPage });
+  assert.equal(defaultViewRotation([at(180, 1), at(180, 2), at(0, 3)]), 180);
+  assert.equal(defaultViewRotation([at(90, null), at(90, null), at(0, 3)]), 0);
+  assert.equal(defaultViewRotation([]), 0);
+});
+
+test("sideViews turns each side so its own pages read upright, then adds the shared turn", () => {
+  // Landscape pages on letter, long edge: the front's pages sit at 90 and the back's at 270.
+  const layout = impose(workedExample({ pageSizes: Array.from({ length: 76 }, () => ({ width: 378, height: 288 })) }));
+  assert.deepEqual(sideViews(layout.sheets, 0), { front: 270, back: 90 });
+  assert.deepEqual(sideViews(layout.sheets, 90), { front: 0, back: 180 });
+  assert.deepEqual(sideViews(impose(workedExample()).sheets, 270), { front: 270, back: 270 });
+});
+
+test("viewSize swaps the sheet's width and height for quarter turns", () => {
+  const sheet = { width: 612, height: 792 };
+  assert.deepEqual(viewSize(sheet, 0), sheet);
+  assert.deepEqual(viewSize(sheet, 180), sheet);
+  assert.deepEqual(viewSize(sheet, 90), { width: 792, height: 612 });
+  assert.deepEqual(viewSize(sheet, 270), { width: 792, height: 612 });
+});
+
+test("a rotated view fits the stage with the swapped size", () => {
+  const sheet = { width: 612, height: 792 };
+  const box = { width: 1000, height: 600 };
+  assert.deepEqual(sheetTransform(viewSize(sheet, 90), box), sheetTransform({ width: 792, height: 612 }, box));
+  assert.ok(sheetTransform(viewSize(sheet, 90), box).scale > sheetTransform(viewSize(sheet, 0), box).scale);
+});
+
+test("viewTransform turns sheet points clockwise into the rotated drawing", () => {
+  const sheet = { width: 612, height: 792 };
+  assert.equal(viewTransform(sheet, 0), undefined);
+  assert.equal(viewTransform(sheet, 90), "translate(792 0) rotate(90)");
+  assert.equal(viewTransform(sheet, 180), "translate(612 792) rotate(180)");
+  assert.equal(viewTransform(sheet, 270), "translate(0 612) rotate(270)");
+});
+
+test("badgeAnchor is the panel corner that shows at the top left of the rotated view", () => {
+  const panel = { x: 10, y: 20, width: 100, height: 200 };
+  assert.deepEqual(badgeAnchor(panel, 0), { x: 10, y: 20 });
+  assert.deepEqual(badgeAnchor(panel, 90), { x: 10, y: 220 });
+  assert.deepEqual(badgeAnchor(panel, 180), { x: 110, y: 220 });
+  assert.deepEqual(badgeAnchor(panel, 270), { x: 110, y: 20 });
 });

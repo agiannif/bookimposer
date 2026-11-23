@@ -330,6 +330,7 @@ fn placement(content: layout::Rect, clip: layout::Rect, rotation: u16) -> PagePl
     PagePlacement {
         pdf_page: Some(0),
         part_index: 0,
+        part_page: 0,
         panel: PANEL,
         content,
         clip,

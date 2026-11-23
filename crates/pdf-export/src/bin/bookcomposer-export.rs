@@ -13,8 +13,8 @@ Commands:
          [--cut-marks] [--fold-marks]
                            Impose the source pages onto sheets as the layout
                            (from engine/bin/impose.ts) places them; the flags
-                           draw cut and fold marks in the margins of each
-                           sheet's front. Warnings go to stderr.
+                           draw the layout's cut and fold marks on both sides
+                           of each sheet. Warnings go to stderr.
 
 PDFium is loaded from $BOOKCOMPOSER_PDFIUM_DIR.";
 

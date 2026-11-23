@@ -5,6 +5,7 @@ import { parseProject, pdfWarnings, serializeProject, type ProjectFile } from ".
 
 const project: ProjectFile = {
   version: 1,
+  unit: "mm",
   pdf: { name: "book.pdf", pageCount: 76, sha256: "ab".repeat(32) },
   settings: { ...DEFAULT_SETTINGS, frontBoard: true, print: { ...DEFAULT_SETTINGS.print, sheet: { width: 500, height: 700 } } },
 };
@@ -108,4 +109,17 @@ test("pdfWarnings also reports a different page count", () => {
     "This PDF is different from the one saved with the project",
     "It has 74 pages, the project expects 76",
   ]);
+});
+
+test("a project without a unit shows lengths in inches", () => {
+  const copy = JSON.parse(serializeProject(project));
+  delete copy.unit;
+  const r = parseProject(JSON.stringify(copy));
+  assert.equal(r.ok && r.project.unit, "in");
+});
+
+test("a unit that is not in, mm or pt is rejected", () => {
+  const copy = JSON.parse(serializeProject(project));
+  copy.unit = "cubits";
+  assert.equal(errorOf(JSON.stringify(copy)), "unit must be one of in, mm, pt");
 });

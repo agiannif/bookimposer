@@ -1,6 +1,7 @@
 <script lang="ts">
   import { SHEET_SIZES, type SheetName } from "../../../engine/src/index.ts";
   import type { BookWorkspace } from "../lib/workspace.svelte.ts";
+  import { presetLabel, UNITS, type Unit } from "../lib/units.ts";
   import NumberField from "./NumberField.svelte";
 
   /** `full` adds what the setup screen leaves out: the page size mismatch policy and marks. */
@@ -27,23 +28,30 @@
   const height = customSide("height");
 </script>
 
-<label class="field">
+<label class="stack">
+  <span>Units</span>
+  <select value={ws.unit} onchange={(e) => ws.chooseUnit(e.currentTarget.value as Unit)} data-testid="unit">
+    {#each UNITS as u (u)}
+      <option value={u}>{u}</option>
+    {/each}
+  </select>
+</label>
+<label class="stack">
   <span>Sheet size</span>
   <select value={sheetChoice} onchange={chooseSheet} data-testid="sheet-size">
-    <option value="letter">Letter</option>
-    <option value="a4">A4</option>
-    <option value="tabloid">Tabloid</option>
-    <option value="a3">A3</option>
+    {#each Object.keys(SHEET_SIZES) as name (name)}
+      <option value={name}>{presetLabel(name as SheetName, ws.unit)}</option>
+    {/each}
     <option value="custom">Custom</option>
   </select>
 </label>
 {#if sheetChoice === "custom"}
-  <NumberField label="Width" bind:value={width.get, width.set} unit="pt" testid="sheet-width" />
-  <NumberField label="Height" bind:value={height.get, height.set} unit="pt" testid="sheet-height" />
+  <NumberField label="Width" bind:value={width.get, width.set} unit={ws.unit} testid="sheet-width" />
+  <NumberField label="Height" bind:value={height.get, height.set} unit={ws.unit} testid="sheet-height" />
 {/if}
 
 <div class="stack">
-  <label class="field">
+  <label class="stack">
     <span>Duplex</span>
     <select bind:value={print.duplex} data-testid="duplex">
       <option value="long-edge">Long edge</option>
@@ -53,9 +61,9 @@
   <p class="hint">Long edge is the usual setting for portrait paper</p>
 </div>
 
-<NumberField label="Margin" bind:value={print.margin} unit="pt" testid="margin" />
-<NumberField label="Gap" bind:value={print.gap} unit="pt" testid="gap" />
-<NumberField label="Bleed" bind:value={print.bleed} unit="pt" testid="bleed" />
+<NumberField label="Margin" bind:value={print.margin} unit={ws.unit} testid="margin" />
+<NumberField label="Gap" bind:value={print.gap} unit={ws.unit} testid="gap" />
+<NumberField label="Bleed" bind:value={print.bleed} unit={ws.unit} testid="bleed" />
 
 {#if full}
   <label class="stack">
@@ -70,18 +78,13 @@
 {/if}
 
 <style>
-  .field {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-3);
-  }
+  /* Choices stack their label above a full-width select; numbers sit inline (NumberField). */
   .stack {
     display: flex;
     flex-direction: column;
     gap: var(--space-1);
   }
   select {
-    max-width: 100%;
+    width: 100%;
   }
 </style>

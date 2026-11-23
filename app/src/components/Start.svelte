@@ -24,7 +24,7 @@
   <p class="hint">Turn a PDF into printable sheets for a zine or book.</p>
   {#if project}
     <div class="actions">
-      <label class={["open", { busy }]}>
+      <label class={["open", "button", "primary", { busy }]}>
         {busy ? "Reading PDF…" : `Choose ${project.pdf.name} to continue`}
         <input type="file" accept=".pdf,application/pdf" disabled={busy} {onchange} data-testid="choose-pdf" />
       </label>
@@ -32,7 +32,7 @@
     </div>
   {:else}
     <div class="actions">
-      <label class={["open", { busy }]}>
+      <label class={["open", "button", "primary", { busy }]}>
         {busy ? "Reading PDF…" : "Open PDF"}
         <input type="file" accept=".pdf,application/pdf" disabled={busy} {onchange} data-testid="open-pdf" />
       </label>
@@ -51,23 +51,18 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: var(--space-3);
+    gap: var(--space-2);
     text-align: center;
   }
-  h1 {
-    font-size: 32px;
+  .start > .hint {
+    font-size: var(--text-md);
   }
   .actions {
     display: flex;
-    gap: var(--space-3);
+    gap: var(--space-2);
     margin-top: var(--space-4);
   }
   .open {
-    background: var(--accent);
-    color: #fff;
-    border-radius: var(--radius);
-    padding: var(--space-2) var(--space-5);
-    cursor: pointer;
     position: relative;
   }
   .open.busy {

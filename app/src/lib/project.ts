@@ -1,8 +1,11 @@
 import { SHEET_SIZES, type SheetName } from "../../../engine/src/index.ts";
 import type { BookSettings } from "./book.ts";
+import { DEFAULT_UNIT, UNITS, type Unit } from "./units.ts";
 
 export interface ProjectFile {
   version: 1;
+  /** The unit lengths are shown in; the settings themselves are in points. */
+  unit: Unit;
   pdf: { name: string; pageCount: number; sha256: string };
   settings: BookSettings;
 }
@@ -53,6 +56,12 @@ function number(o: Record<string, unknown>, key: string, path: string, kind: "wh
 function oneOf<T>(o: Record<string, unknown>, key: string, path: string, allowed: readonly T[]): T {
   if (!allowed.includes(o[key] as T)) fail(`${path}.${key}`, `one of ${allowed.join(", ")}`);
   return o[key] as T;
+}
+
+function unit(o: Record<string, unknown>): Unit {
+  if (o.unit === undefined) return DEFAULT_UNIT;
+  if (!UNITS.includes(o.unit as Unit)) fail("unit", `one of ${UNITS.join(", ")}`);
+  return o.unit as Unit;
 }
 
 function sheet(o: Record<string, unknown>, path: string): BookSettings["print"]["sheet"] {
@@ -111,6 +120,7 @@ export function parseProject(text: string): ParseResult {
       ok: true,
       project: {
         version: 1,
+        unit: unit(o),
         pdf: {
           name: string(pdf, "name", "pdf"),
           pageCount: pageCount(pdf, "pageCount", "pdf"),

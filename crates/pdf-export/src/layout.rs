@@ -21,11 +21,13 @@ pub struct Rect {
 }
 
 /// One page on one side of a sheet. `pdf_page` None is a blank panel.
+/// `part_page` is its index in the part's allocation `pdf_pages`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PagePlacement {
     pub pdf_page: Option<usize>,
     pub part_index: usize,
+    pub part_page: usize,
     pub panel: Rect,
     pub content: Rect,
     pub clip: Rect,
@@ -63,19 +65,48 @@ pub struct FoldLine {
     pub opens_by_trim: bool,
 }
 
+/// How marks are drawn, in points: every tick `stroke_width` wide, cut
+/// ticks solid, fold ticks with the on and off lengths in `dash`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct MarkStyle {
+    pub stroke_width: f64,
+    pub dash: MarkDash,
+}
+
+/// On and off lengths for a spine fold tick and for one that opens by trim.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct MarkDash {
+    pub spine: Vec<f64>,
+    pub opens_by_trim: Vec<f64>,
+}
+
+/// The exact mark segments to draw on one side, in that side's
+/// coordinates. The engine places them clear of every clip and with no two
+/// overlapping; the back's sit behind the front's after the duplex flip.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SideMarks {
+    pub cut: Vec<SheetLine>,
+    pub fold: Vec<FoldLine>,
+}
+
+/// `guides` are the full cut and fold lines in this side's coordinates, for
+/// previews; the marks to draw are `marks`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SheetSide {
     pub placements: Vec<PagePlacement>,
+    pub guides: SideMarks,
+    pub marks: SideMarks,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(deny_unknown_fields)]
 pub struct Sheet {
     pub front: SheetSide,
     pub back: SheetSide,
-    pub cut_lines: Vec<SheetLine>,
-    pub fold_lines: Vec<FoldLine>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -103,6 +134,15 @@ pub struct BodySummary {
     pub pages_per_signature: usize,
     pub pieces_per_signature: usize,
     pub blanks_added: usize,
+    pub leaf_pages: LeafPages,
+}
+
+/// Blank pages of the leaves the boards wrap, at the start and end of the body.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LeafPages {
+    pub before: usize,
+    pub after: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -111,13 +151,6 @@ pub struct PerSheet {
     pub part_indexes: Vec<usize>,
     pub per_sheet: usize,
     pub sheets: usize,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Fillers {
-    pub count: usize,
-    pub size: Size,
 }
 
 /// The imposition of a whole book. On an error issue, `sheets` is empty.
@@ -130,8 +163,9 @@ pub struct Layout {
     pub allocations: Vec<PartAllocation>,
     pub body: Option<BodySummary>,
     pub per_sheet: Vec<PerSheet>,
-    pub fillers: Fillers,
     pub issues: Vec<Issue>,
+    /// How every side's `marks` are drawn.
+    pub mark_style: MarkStyle,
 }
 
 /// A Layout that could not be read. The message names the offending field

@@ -9,8 +9,11 @@ export const BOOK_76 = fixture("book-76.pdf");
 // The first page-sizes call builds the Rust CLI, which can take minutes on a cold cache.
 export const FIRST_BUILD_MS = 240_000;
 
-/** Opens `pdf` and waits for the setup screen. Returns the page's errors and warnings so far, live. */
-export async function openSetup(page: Page, pdf = BOOK_76) {
+/**
+ * Opens `pdf` and waits for the setup screen, with lengths shown in `unit` (points, so specs can type
+ * and assert PDF-point numbers). Returns the page's errors and warnings so far, live.
+ */
+export async function openSetup(page: Page, pdf = BOOK_76, unit: "in" | "mm" | "pt" = "pt") {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("console", (message) => {
@@ -19,15 +22,16 @@ export async function openSetup(page: Page, pdf = BOOK_76) {
   await page.goto("/");
   await page.getByTestId("open-pdf").setInputFiles(pdf, { timeout: 10_000 });
   await expect(page.getByTestId("start")).toBeVisible({ timeout: FIRST_BUILD_MS });
+  await page.getByTestId("unit").selectOption(unit);
   return errors;
 }
 
-/** Opens `pdf` with 9 signatures and both boards, into the workspace. */
-export async function openWithBoards(page: Page, pdf = BOOK_76) {
-  const errors = await openSetup(page, pdf);
+/** Opens `pdf` with 10 signatures and both boards, into the workspace. */
+export async function openWithBoards(page: Page, pdf = BOOK_76, unit: "in" | "mm" | "pt" = "pt") {
+  const errors = await openSetup(page, pdf, unit);
   await page.getByTestId("front-board").check();
   await page.getByTestId("back-board").check();
-  await page.getByTestId("signatures").fill("9");
+  await page.getByTestId("signatures").fill("10");
   await page.getByTestId("start").click();
   return errors;
 }

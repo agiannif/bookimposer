@@ -21,8 +21,16 @@ test('rotates the piece when that fits more', () => {
   const fit = fitPieces({ width: 576, height: 378 }, { ...print, sheet: { width: 792, height: 612 } })
   assert.deepEqual(fit, {
     rotated: true, across: 2, down: 1, perSheet: 2,
-    slots: [{ x: 18, y: 18, width: 378, height: 576 }, { x: 396, y: 18, width: 378, height: 576 }],
+    slots: [{ x: 396, y: 18, width: 378, height: 576 }, { x: 18, y: 18, width: 378, height: 576 }],
   })
+})
+
+test('turned slots fill in the reading order of the turned pages', () => {
+  // A turned piece's top faces the sheet's right edge, so as read the rows are the sheet's columns from
+  // right to left, and each row runs down the sheet.
+  const fit = fitPieces({ width: 100, height: 50 }, { ...print, sheet: { width: 100, height: 200 }, margin: 0 })
+  assert.deepEqual([fit.rotated, fit.across, fit.down], [true, 2, 2])
+  assert.deepEqual(fit.slots.map((s) => [s.x, s.y]), [[50, 0], [50, 100], [0, 0], [0, 100]])
 })
 
 test('margin decides whether a quarter-letter folio fits twice', () => {

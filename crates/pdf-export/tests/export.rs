@@ -5,7 +5,7 @@ mod support;
 
 use lopdf::{Document, Object};
 use pdf_export::geometry::to_pdf_rect;
-use pdf_export::layout::{self, Issue, Layout, PagePlacement, Sheet, SheetSide};
+use pdf_export::layout::{self, Issue, Layout, PagePlacement, Sheet, SheetSide, SideMarks};
 use pdf_export::{ExportError, ExportOptions, export, page_sizes};
 use pdfium_render::prelude::*;
 use std::collections::HashSet;
@@ -52,7 +52,7 @@ fn writes_a_front_and_a_back_page_per_sheet() {
         .iter()
         .map(|page| (page.width().value, page.height().value))
         .collect();
-    assert_eq!(sizes, vec![(612.0, 792.0); 20]);
+    assert_eq!(sizes, vec![(612.0, 792.0); 22]);
 }
 
 #[test]
@@ -98,9 +98,9 @@ fn output_is_not_bloated() {
 fn visual_identity() {
     let layout = worked_example();
     let sides = [
-        (0, &layout.sheets[0].front),
-        (1, &layout.sheets[0].back),
-        (18, &layout.sheets[9].front),
+        (2, &layout.sheets[1].front),
+        (3, &layout.sheets[1].back),
+        (20, &layout.sheets[10].front),
     ];
     for (output_page, side) in sides {
         let rendered = render(pdfium(), exported(), output_page, PX_PER_PT);
@@ -123,7 +123,7 @@ fn visual_identity() {
 
 #[test]
 fn hidden_board_back_is_blank() {
-    let image = render(pdfium(), exported(), 19, PX_PER_PT);
+    let image = render(pdfium(), exported(), 21, PX_PER_PT);
     assert!(image.pixels().all(|pixel| pixel.0 == WHITE));
 }
 
@@ -182,10 +182,14 @@ fn rotate_attribute() {
     layout.sheets = vec![Sheet {
         front: SheetSide {
             placements: vec![placement(landscape, 0), placement(portrait, 90)],
+            guides: SideMarks::default(),
+            marks: SideMarks::default(),
         },
-        back: SheetSide { placements: vec![] },
-        cut_lines: vec![],
-        fold_lines: vec![],
+        back: SheetSide {
+            placements: vec![],
+            guides: SideMarks::default(),
+            marks: SideMarks::default(),
+        },
     }];
 
     let pdf = export_pdf(&source, &layout);
@@ -234,10 +238,14 @@ fn rotated_page_fills_a_panel_of_its_reported_size() {
     layout.sheets = vec![Sheet {
         front: SheetSide {
             placements: vec![placement(panel, 0)],
+            guides: SideMarks::default(),
+            marks: SideMarks::default(),
         },
-        back: SheetSide { placements: vec![] },
-        cut_lines: vec![],
-        fold_lines: vec![],
+        back: SheetSide {
+            placements: vec![],
+            guides: SideMarks::default(),
+            marks: SideMarks::default(),
+        },
     }];
 
     let pdf = export_pdf(&source, &layout);
@@ -299,10 +307,14 @@ fn half_and_three_quarter_turned_pages_away_from_the_origin() {
         layout.sheets = vec![Sheet {
             front: SheetSide {
                 placements: vec![placement(panel, 0)],
+                guides: SideMarks::default(),
+                marks: SideMarks::default(),
             },
-            back: SheetSide { placements: vec![] },
-            cut_lines: vec![],
-            fold_lines: vec![],
+            back: SheetSide {
+                placements: vec![],
+                guides: SideMarks::default(),
+                marks: SideMarks::default(),
+            },
         }];
 
         let pdf = export_pdf(&source, &layout);
@@ -350,10 +362,14 @@ fn cropped_page_fills_a_panel_of_its_reported_size() {
     layout.sheets = vec![Sheet {
         front: SheetSide {
             placements: vec![placement(panel, 0)],
+            guides: SideMarks::default(),
+            marks: SideMarks::default(),
         },
-        back: SheetSide { placements: vec![] },
-        cut_lines: vec![],
-        fold_lines: vec![],
+        back: SheetSide {
+            placements: vec![],
+            guides: SideMarks::default(),
+            marks: SideMarks::default(),
+        },
     }];
 
     let pdf = export_pdf(&source, &layout);
@@ -501,6 +517,7 @@ fn placement(content: layout::Rect, rotation: u16) -> PagePlacement {
     PagePlacement {
         pdf_page: Some(0),
         part_index: 0,
+        part_page: 0,
         panel: content,
         content,
         clip: content,

@@ -59,20 +59,23 @@
     flex-direction: column;
     gap: var(--space-1);
   }
-  h1 {
-    font-size: 22px;
-  }
+  /* One white sheet with the two groups side by side, a hairline between them. */
   .columns {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: var(--space-4);
-    align-items: start;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+  }
+  .columns .panel + .panel {
+    border-top: 0;
+    border-left: 1px solid var(--line);
   }
   .actions {
     display: flex;
     justify-content: flex-end;
   }
   .actions button {
-    padding: var(--space-2) var(--space-6);
+    padding-inline: var(--space-5);
   }
 </style>

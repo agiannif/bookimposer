@@ -1,5 +1,6 @@
 export { impose } from './impose.ts'
+export { MARK_STYLE, issuesForMarks } from './marks.ts'
 export type * from './types.ts'
 export type { Rect, Rotation } from './geometry.ts'
-export { pagesPerPiece } from './allocate.ts'
+export { bodyPageCount, pagesPerPiece } from './allocate.ts'
 export { SHEET_SIZES, type SheetName } from './sheets.ts'

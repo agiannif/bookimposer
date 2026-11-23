@@ -20,21 +20,22 @@ const pageAt = (panels: Piece['front'], col: number, row: number) => {
   return panel.pdfPage
 }
 
-test('worked example body makes 18 pieces in reading order', () => {
+test('worked example body makes 20 pieces in reading order', () => {
   const pieces = bodyPiecesOf(workedExample(), 1)
-  assert.equal(pieces.length, 18)
+  assert.equal(pieces.length, 20)
   assert.ok(pieces.every((p) => p.kind === 'body' && p.partIndex === 1 && p.cols === 2 && p.rows === 1))
+  // The outer piece of the first signature holds the blank leaf the front board wraps.
   const p0 = pieces[0]
-  assert.equal(pageAt(p0.front, 0, 0), 9)
-  assert.equal(pageAt(p0.front, 1, 0), 2)
-  assert.equal(pageAt(p0.back, 0, 0), 3)
-  assert.equal(pageAt(p0.back, 1, 0), 8)
+  assert.equal(pageAt(p0.front, 0, 0), 7)
+  assert.equal(pageAt(p0.front, 1, 0), null)
+  assert.equal(pageAt(p0.back, 0, 0), null)
+  assert.equal(pageAt(p0.back, 1, 0), 6)
   const p1 = pieces[1]
-  assert.equal(pageAt(p1.front, 0, 0), 7)
-  assert.equal(pageAt(p1.front, 1, 0), 4)
-  assert.equal(pageAt(p1.back, 0, 0), 5)
-  assert.equal(pageAt(p1.back, 1, 0), 6)
-  assert.equal(pageAt(pieces[2].front, 1, 0), 10)
+  assert.equal(pageAt(p1.front, 0, 0), 5)
+  assert.equal(pageAt(p1.front, 1, 0), 2)
+  assert.equal(pageAt(p1.back, 0, 0), 3)
+  assert.equal(pageAt(p1.back, 1, 0), 4)
+  assert.equal(pageAt(pieces[2].front, 1, 0), 8)
 })
 
 test('2-fold body maps panels with rotation and mirrored back columns', () => {
@@ -91,8 +92,8 @@ test('boards are 2x1 with the pages on the front and nothing on the back', () =>
   assert.equal(front.cols, 2)
   assert.equal(front.rows, 1)
   assert.deepEqual(front.front, [
-    { col: 0, row: 0, pdfPage: 0, rotation: 0 },
-    { col: 1, row: 0, pdfPage: 1, rotation: 0 },
+    { col: 0, row: 0, pdfPage: 0, partPage: 0, rotation: 0 },
+    { col: 1, row: 0, pdfPage: 1, partPage: 1, rotation: 0 },
   ])
   assert.deepEqual(front.back, [])
   assert.deepEqual(front.foldLines, [{ axis: 'vertical', index: 1, opensByTrim: false }])
@@ -101,16 +102,16 @@ test('boards are 2x1 with the pages on the front and nothing on the back', () =>
   assert.deepEqual(back.back, [])
 })
 
-test('a short body pads the last signature with blank panels', () => {
+test('a short body pads the last signature with blank panels before the back leaf', () => {
   const spec = workedExample({
-    pageSizes: Array.from({ length: 74 }, () => ({ width: 288, height: 378 })),
+    pageSizes: Array.from({ length: 70 }, () => ({ width: 288, height: 378 })),
+    parts: [{ type: 'board' }, { type: 'body', signatures: 9, folds: 1 }, { type: 'board' }],
   })
   const pieces = bodyPiecesOf(spec, 1)
-  // body pages 71 and 72 are blank; they sit on the outer piece of the last signature
-  const outer = pieces[pieces.length - 2]
-  assert.deepEqual([pageAt(outer.front, 0, 0), pageAt(outer.front, 1, 0)], [null, 66])
-  assert.equal(pageAt(outer.back, 0, 0), 67)
-  assert.equal(pageAt(outer.back, 1, 0), null)
+  // The last signature is body pages 65-72: PDF pages 64-67, 2 padding blanks, then the back board's blank leaf.
+  const [outer, inner] = pieces.slice(-2)
+  assert.deepEqual([pageAt(outer.front, 0, 0), pageAt(outer.front, 1, 0), pageAt(outer.back, 0, 0), pageAt(outer.back, 1, 0)], [null, 64, 65, null])
+  assert.deepEqual([pageAt(inner.front, 0, 0), pageAt(inner.front, 1, 0), pageAt(inner.back, 0, 0), pageAt(inner.back, 1, 0)], [null, 66, 67, null])
   const blanks = pieces.flatMap((p) => [...p.front, ...p.back]).filter((p) => p.pdfPage === null)
-  assert.equal(blanks.length, 2)
+  assert.equal(blanks.length, 6)
 })

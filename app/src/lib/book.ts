@@ -1,4 +1,4 @@
-import { pagesPerPiece, SHEET_SIZES } from "../../../engine/src/index.ts";
+import { bodyPageCount, pagesPerPiece, SHEET_SIZES } from "../../../engine/src/index.ts";
 import type { BookSpec, DuplexFlip, FoldCount, MismatchPolicy, PartSpec, SheetName, Size } from "../../../engine/src/index.ts";
 
 export interface PrintChoice {
@@ -48,16 +48,21 @@ export function bookParts(s: BookSettings): BookPart[] {
   return kinds.map((kind) => ({ kind, name: PART_NAMES[kind] }));
 }
 
-export function toBookSpec(pageSizes: Size[], s: BookSettings): BookSpec {
-  const parts: PartSpec[] = bookParts(s).map((p) =>
+function partSpecs(s: BookSettings): PartSpec[] {
+  return bookParts(s).map((p) =>
     p.kind === "body" ? { type: "body", signatures: s.signatures, folds: s.folds } : { type: "board" });
+}
+
+export function toBookSpec(pageSizes: Size[], s: BookSettings): BookSpec {
+  const parts = partSpecs(s);
   const sheet = typeof s.print.sheet === "string" ? SHEET_SIZES[s.print.sheet] : s.print.sheet;
   return { pageSizes, parts, print: { ...s.print, sheet }, mismatch: s.mismatch };
 }
 
-// How many signatures keep each one near a full-size piece (at least 8 pages), after the boards take 2 pages each.
+// How many signatures keep each one near a full-size piece (at least 8 pages). The body is what the boards'
+// pages leave of the PDF, plus the blank leaves the boards wrap.
 export function suggestSignatures(pageCount: number, s: BookSettings): number {
-  const bodyPages = pageCount - 2 * (Number(s.frontBoard) + Number(s.backBoard));
+  const bodyPages = bodyPageCount(pageCount, partSpecs(s));
   const target = Math.max(8, pagesPerPiece(s.folds));
   return Math.max(1, Math.ceil(bodyPages / target));
 }

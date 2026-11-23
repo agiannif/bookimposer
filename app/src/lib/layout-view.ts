@@ -1,5 +1,5 @@
 // What the workspace panels show, read off a Layout. Pure, so the components stay thin.
-import type { Layout } from "../../../engine/src/index.ts";
+import type { Layout, PagePlacement } from "../../../engine/src/index.ts";
 import type { BookPart } from "./book.ts";
 
 /** 1-based runs of PDF pages ("1–2, 5–7") and how many blank pages were added. */
@@ -23,17 +23,28 @@ export interface AllocationSegment {
   kind: BookPart["kind"];
   name: string;
   ranges: string;
+  /** Padding blanks; the blank leaves are counted apart. */
   blanks: number;
+  /** Blank pages of the leaves the boards wrap, before and after the PDF pages: 0 or 2 each, body only. */
+  leafBefore: number;
+  leafAfter: number;
   /** Pages in this part, blanks included; sizes the segment in the bar. */
   pages: number;
 }
 
 export function allocationSegments(layout: Layout, parts: BookPart[]): AllocationSegment[] {
-  return layout.allocations.map((a) => ({
-    ...parts[a.partIndex],
-    ...pageRanges(a.pdfPages),
-    pages: a.pdfPages.length,
-  }));
+  return layout.allocations.map((a) => {
+    const leaves = a.type === "body" ? layout.body?.leafPages : undefined;
+    const leafBefore = leaves?.before ?? 0;
+    const leafAfter = leaves?.after ?? 0;
+    return {
+      ...parts[a.partIndex],
+      ...pageRanges(a.pdfPages.slice(leafBefore, a.pdfPages.length - leafAfter)),
+      leafBefore,
+      leafAfter,
+      pages: a.pdfPages.length,
+    };
+  });
 }
 
 /** null where the layout cannot tell, e.g. sheet counts on an error layout. */
@@ -57,12 +68,20 @@ export function derivedNumbers(layout: Layout): DerivedNumbers {
   };
 }
 
-const points = (n: number) => String(Math.round(n * 100) / 100);
-
-/** What to cut for the boards' fillers, from Layout.fillers; null when the book has no boards. */
-export function fillerNote(layout: Layout): string | null {
-  const { count, size } = layout.fillers;
-  if (count === 0) return null;
-  const pieces = count === 1 ? "1 blank piece" : `${count} blank pieces`;
-  return `Cut ${pieces} of ${points(size.width)} × ${points(size.height)} pt for the board filler${count === 1 ? "" : "s"}`;
+/**
+ * The 1-based number a panel shows: its PDF page's, or for a page of a blank leaf a board wraps, the
+ * number of the board's page in the same place (the front leaf shows 1 and 2, the back leaf the last
+ * two). Padding blanks get null.
+ */
+export function panelLabel(layout: Layout, p: PagePlacement): string | null {
+  if (p.pdfPage !== null) return String(p.pdfPage + 1);
+  const leaves = layout.body?.leafPages;
+  const part = layout.allocations[p.partIndex];
+  if (part?.type !== "body" || !leaves) return null;
+  // Allocations are in part order, so the boards that wrap the leaves sit right before and after the body.
+  const after = part.pdfPages.length - leaves.after;
+  const board = p.partPage < leaves.before
+    ? layout.allocations[p.partIndex - 1]?.pdfPages[p.partPage]
+    : p.partPage >= after ? layout.allocations[p.partIndex + 1]?.pdfPages[p.partPage - after] : null;
+  return board === null || board === undefined ? null : String(board + 1);
 }

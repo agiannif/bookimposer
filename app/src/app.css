@@ -1,25 +1,32 @@
+/* Calm and editorial: neutral surfaces, hairline dividers, one accent for the primary action and the
+   current selection. The sheets sit on the grey canvas; the chrome around them is white. */
 :root {
   --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --text-sm: 12px;
+  --text-md: 14px;
+  --text-lg: 20px;
+
   --text: #1f2328;
-  --muted: #646b73;
-  --bg: #f6f5f2;
+  --muted: #595f67;
+  --canvas: #f3f3f1;
   --surface: #ffffff;
-  --line: #e2dfd8;
-  --accent: #3a6ea5;
-  --accent-soft: #e6eef7;
-  --board: #c9a46a;
-  --board-soft: #f5ecdd;
+  --hover: #efefec;
+  --line: #e2e2de;
+  --control: #8e8e88;
+  --accent: #2b5a8a;
+  --accent-hover: #224a72;
+  --on-accent: #ffffff;
+  --fold-line: #3a6ea5;
   --error: #b3261e;
-  --error-soft: #fbe9e7;
-  --warning: #8a5a00;
-  --warning-soft: #fff4d6;
+  --warning: #7a5000;
+
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
   --space-5: 24px;
   --space-6: 40px;
-  --radius: 8px;
+  --radius: 3px;
 }
 
 * {
@@ -29,10 +36,10 @@
 body {
   margin: 0;
   font-family: var(--font);
-  font-size: 14px;
+  font-size: var(--text-md);
   line-height: 1.45;
   color: var(--text);
-  background: var(--bg);
+  background: var(--canvas);
 }
 
 h1, h2, h3 {
@@ -40,11 +47,12 @@ h1, h2, h3 {
   font-weight: 600;
 }
 
+h1 {
+  font-size: var(--text-lg);
+}
+
 h2 {
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted);
+  font-size: var(--text-md);
 }
 
 button, input, select {
@@ -52,16 +60,21 @@ button, input, select {
   color: inherit;
 }
 
-button {
-  border: 1px solid var(--line);
+input[type="checkbox"] {
+  accent-color: var(--accent);
+}
+
+button, .button {
+  display: inline-block;
+  border: 1px solid var(--control);
   background: var(--surface);
   border-radius: var(--radius);
-  padding: var(--space-2) var(--space-4);
+  padding: var(--space-1) var(--space-3);
   cursor: pointer;
 }
 
-button:hover:not(:disabled) {
-  border-color: var(--accent);
+button:hover:not(:disabled), .button:hover {
+  background: var(--hover);
 }
 
 button:disabled {
@@ -69,14 +82,19 @@ button:disabled {
   opacity: 0.5;
 }
 
-button.primary {
+.primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
+}
+
+button.primary:hover:not(:disabled), .button.primary:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
 }
 
 input[type="number"], select {
-  border: 1px solid var(--line);
+  border: 1px solid var(--control);
   border-radius: var(--radius);
   background: var(--surface);
   padding: var(--space-1) var(--space-2);
@@ -84,17 +102,19 @@ input[type="number"], select {
 
 input:focus-visible, select:focus-visible, button:focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline-offset: 2px;
 }
 
+/* A group of form rows under a heading. Stacked groups are divided by a hairline. */
 .panel {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
   padding: var(--space-4);
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+}
+
+.panel + .panel {
+  border-top: 1px solid var(--line);
 }
 
 .check {
@@ -103,8 +123,46 @@ input:focus-visible, select:focus-visible, button:focus-visible {
   gap: var(--space-2);
 }
 
+.check input {
+  margin: 0;
+}
+
 .hint {
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--text-sm);
   margin: 0;
+}
+
+/* A message strip: an error or warning in its colour, on white with a matching hairline. */
+.notice {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);
+  border: 1px solid currentColor;
+  border-radius: var(--radius);
+}
+
+.notice.error {
+  color: var(--error);
+}
+
+.notice.warning {
+  color: var(--warning);
+}
+
+.notice ul, .notice p {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* The notice's dismiss button: a bare ×. */
+.notice button {
+  border: 0;
+  background: none;
+  padding: 0 var(--space-1);
+  color: inherit;
 }

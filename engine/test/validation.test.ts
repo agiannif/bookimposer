@@ -15,7 +15,6 @@ const assertEmpty = (layout: Layout) => {
   assert.deepEqual(layout.perSheet, [])
   assert.deepEqual(layout.allocations, [])
   assert.equal(layout.body, null)
-  assert.deepEqual(layout.fillers, { count: 0, size: { width: 0, height: 0 } })
 }
 
 test('a zero-width first page with no gap reports invalid-page-size instead of hanging', () => {

@@ -1,7 +1,8 @@
 import type { Rect } from './geometry.ts'
 import type { PrintSettings, Size } from './types.ts'
 
-// Each slot is the piece's bleed box on the sheet front, already rotated if rotated.
+// Each slot is the piece's bleed box on the sheet front, already rotated if rotated. Slots come in the
+// order pieces fill them: the reading order of the pieces' pages, top row first, each row left to right.
 export interface SlotFit { rotated: boolean; across: number; down: number; perSheet: number; slots: Rect[] }
 
 export function pieceSize(cols: number, rows: number, panel: Size, bleed: number): Size {
@@ -26,14 +27,21 @@ function fitOriented(piece: Size, print: PrintSettings, rotated: boolean): SlotF
   if (across > 0 && down > 0) {
     const x0 = gridStart(sheet.width, piece.width, across, margin, gap)
     const y0 = gridStart(sheet.height, piece.height, down, margin, gap)
-    for (let row = 0; row < down; row++) {
-      for (let col = 0; col < across; col++) {
-        slots.push({
-          x: x0 + col * (piece.width + gap),
-          y: y0 + row * (piece.height + gap),
-          width: piece.width,
-          height: piece.height,
-        })
+    const slot = (col: number, row: number): Rect => ({
+      x: x0 + col * (piece.width + gap),
+      y: y0 + row * (piece.height + gap),
+      width: piece.width,
+      height: piece.height,
+    })
+    if (rotated) {
+      // A turned piece's top faces the sheet's right edge. Read upright, the rows are the sheet's columns
+      // from right to left, and each row runs down the sheet.
+      for (let col = across - 1; col >= 0; col--) {
+        for (let row = 0; row < down; row++) slots.push(slot(col, row))
+      }
+    } else {
+      for (let row = 0; row < down; row++) {
+        for (let col = 0; col < across; col++) slots.push(slot(col, row))
       }
     }
   }

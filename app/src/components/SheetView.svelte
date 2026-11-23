@@ -2,14 +2,20 @@
   // The current sheet's front and back as printed, drawn straight from the Layout: each side is an SVG
   // whose viewBox is the sheet in points, so engine rects are used as they are.
   import { onDestroy, untrack } from "svelte";
-  import type { Layout, PagePlacement } from "../../../engine/src/index.ts";
+  import type { Layout, PagePlacement, Rotation } from "../../../engine/src/index.ts";
   import type { PageBoxes } from "../lib/backend.ts";
-  import { fittedStage, imageRectForPlacement, sheetTransform, sidesLayout, thumbnailWidth } from "../lib/sheet-geometry.ts";
+  import {
+    badgeAnchor, fittedStage, imageRectForPlacement, markStrokes, sheetTransform, sideViews, sidesLayout, thumbnailWidth, viewSize, viewTransform,
+  } from "../lib/sheet-geometry.ts";
+  import { panelLabel } from "../lib/layout-view.ts";
   import { BitmapUrls } from "../lib/thumbnail-urls.ts";
   import { ThumbnailCache, previewFailure, startThumbnailWorker } from "../lib/thumbnails.ts";
 
-  /** `boxes[i]` is PDF page i's boxes, which place its preview so the trim lands on the placement's content. */
-  let { layout, pdf, boxes }: { layout: Layout; pdf: ArrayBuffer; boxes: PageBoxes[] } = $props();
+  /**
+   * `boxes[i]` is PDF page i's boxes, which place its preview so the trim lands on the placement's content.
+   * `marks` says which marks the export draws, for showing them as exported.
+   */
+  let { layout, pdf, boxes, marks }: { layout: Layout; pdf: ArrayBuffer; boxes: PageBoxes[]; marks: { cut: boolean; fold: boolean } } = $props();
   const uid = $props.id();
 
   const worker = startThumbnailWorker();
@@ -30,6 +36,23 @@
   // Declared before the thumbnail effect so the load reaches the worker before any render.
   $effect(() => {
     cache.load(pdf).catch(thumbnailFailed);
+  });
+
+  /** Off shows the full cut and fold lines on both sides; on shows both sides' marks as the export prints them. */
+  let marksAsExported = $state(false);
+
+  // Each side turns so most of its own pages read upright. The user's turn adds to both sides and holds
+  // while those defaults stay the same; when they change (other folds, other sheet), it is dropped.
+  const defaults = $derived(sideViews(layout.sheets, 0));
+  const defaultsKey = $derived(`${defaults.front} ${defaults.back}`);
+  let picked = $state<{ base: string; turn: Rotation } | null>(null);
+  const extraTurn = $derived(picked && picked.base === defaultsKey ? picked.turn : 0);
+  function turn(by: 90 | 270) {
+    picked = { base: defaultsKey, turn: ((extraTurn + by) % 360) as Rotation };
+  }
+  const views = $derived({
+    front: ((defaults.front + extraTurn) % 360) as Rotation,
+    back: ((defaults.back + extraTurn) % 360) as Rotation,
   });
 
   let chosen = $state(0);
@@ -57,18 +80,26 @@
   let areaWidth = $state(0);
   let areaHeight = $state(0);
   let captionHeight = $state(0);
-  const sides = $derived(sidesLayout(layout.sheet, { width: areaWidth, height: areaHeight }, GAP, captionHeight + CAPTION_GAP));
-  // Each stage hugs its sheet, so the caption sits right above it.
-  const stage = $derived(fittedStage(layout.sheet, sides.stage));
-  const t = $derived(sheetTransform(layout.sheet, stage));
-  /** Sheet points per CSS pixel, for strokes and badges that keep their size on screen. */
-  const px = $derived(1 / t.scale);
+  const sides = $derived(sidesLayout(viewSize(layout.sheet, views.front), { width: areaWidth, height: areaHeight }, GAP, captionHeight + CAPTION_GAP));
+  /**
+   * How a side with view `view` is drawn: the turned sheet's size, the stage that hugs it (so the caption
+   * sits right above it), its transform, and `px`, sheet points per CSS pixel for strokes and badges that
+   * keep their size on screen.
+   */
+  function sideFit(view: Rotation) {
+    const shown = viewSize(layout.sheet, view);
+    const stage = fittedStage(shown, sides.stage);
+    const t = sheetTransform(shown, stage);
+    return { view, shown, stage, t, px: 1 / t.scale };
+  }
+  const fits = $derived({ front: sideFit(views.front), back: sideFit(views.back) });
 
   /** Thumbnail URLs by 0-based PDF page, for the current sheet's pages. */
   let hrefs = $state.raw(new Map<number, string>());
 
   $effect(() => {
-    if (!sheet || t.scale === 0) return;
+    const scale = Math.max(fits.front.t.scale, fits.back.t.scale);
+    if (!sheet || scale === 0) return;
     const placed = [...sheet.front.placements, ...sheet.back.placements].filter((p) => p.pdfPage !== null);
     const pages = new Set(placed.map((p) => p.pdfPage!));
     cache.cancelAllExcept(pages);
@@ -78,7 +109,6 @@
         hrefs = new Map([...hrefs].filter(([page]) => pages.has(page)));
       }
     });
-    const scale = t.scale;
     let current = true;
     for (const p of placed) {
       const page = p.pdfPage!;
@@ -106,18 +136,20 @@
 
 {#snippet side(name: "front" | "back", label: string)}
   {@const placements = sheet![name].placements}
+  {@const { view, shown, stage, t, px } = fits[name]}
   <figure class="side" style:gap="{CAPTION_GAP}px">
     <figcaption bind:clientHeight={captionHeight}>{label}</figcaption>
     <div class="stage" style:width="{stage.width}px" style:height="{stage.height}px">
       {#if t.scale > 0}
         <svg
           data-testid="sheet-{name}"
-          viewBox="0 0 {layout.sheet.width} {layout.sheet.height}"
-          width={layout.sheet.width * t.scale}
-          height={layout.sheet.height * t.scale}
+          viewBox="0 0 {shown.width} {shown.height}"
+          width={shown.width * t.scale}
+          height={shown.height * t.scale}
           style:left="{t.offsetX}px"
           style:top="{t.offsetY}px"
         >
+          <g transform={viewTransform(layout.sheet, view)}>
           <defs>
             <pattern id="{uid}-hatch-{name}" patternUnits="userSpaceOnUse" width={8 * px} height={8 * px} patternTransform="rotate(45)">
               <line x1="0" y1="0" x2="0" y2={8 * px} class="hatch" stroke-width={2 * px} />
@@ -131,8 +163,10 @@
           <rect class="paper" x="0" y="0" width={layout.sheet.width} height={layout.sheet.height} stroke-width={px} />
           {#each placements as p, i (i)}
             {#if p.pdfPage === null}
+              <!-- A blank leaf a board wraps is numbered like the board's pages; padding is not. -->
               <rect
                 data-testid="blank-panel"
+                data-leaf={panelLabel(layout, p) !== null}
                 x={p.panel.x}
                 y={p.panel.y}
                 width={p.panel.width}
@@ -158,11 +192,26 @@
               </g>
             {/if}
           {/each}
-          {#if name === "front"}
-            {#each sheet!.cutLines as l, i (i)}
+          {#if marksAsExported}
+            <!-- At least a pixel wide so a thin stroke stays visible; positions and dashes are the export's. -->
+            {#each markStrokes(sheet![name].marks, marks, layout.markStyle) as m, i (i)}
+              <line
+                data-testid="mark"
+                data-kind={m.kind}
+                class="mark"
+                x1={m.x1}
+                y1={m.y1}
+                x2={m.x2}
+                y2={m.y2}
+                stroke-width={Math.max(layout.markStyle.strokeWidth, px)}
+                stroke-dasharray={m.dash?.join(" ")}
+              />
+            {/each}
+          {:else}
+            {#each sheet![name].guides.cut as l, i (i)}
               <line data-testid="cut-line" class="cut" x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2} stroke-width={px} />
             {/each}
-            {#each sheet!.foldLines as l, i (i)}
+            {#each sheet![name].guides.fold as l, i (i)}
               <line
                 data-testid="fold-line"
                 data-opens-by-trim={l.opensByTrim}
@@ -177,20 +226,29 @@
             {/each}
           {/if}
           {#each placements as p, i (i)}
-            {#if p.pdfPage !== null}
-              {@const label = String(p.pdfPage + 1)}
-              <g data-testid="badge" data-side={name} data-pdf-page={p.pdfPage} class="badge">
+            {@const label = panelLabel(layout, p)}
+            {#if label !== null}
+              {@const anchor = badgeAnchor(p.panel, view)}
+              <!-- Turned back against the view so the number reads upright, at the panel's corner that shows top left. -->
+              <g
+                data-testid="badge"
+                data-side={name}
+                data-pdf-page={p.pdfPage}
+                class="badge"
+                transform="translate({anchor.x} {anchor.y}) rotate({-view})"
+              >
                 <rect
-                  x={p.panel.x + 4 * px}
-                  y={p.panel.y + 4 * px}
+                  x={4 * px}
+                  y={4 * px}
                   width={(8 + 7 * label.length) * px}
                   height={16 * px}
                   rx={3 * px}
                 />
-                <text x={p.panel.x + 8 * px} y={p.panel.y + 16 * px} font-size={11 * px}>{label}</text>
+                <text x={8 * px} y={16 * px} font-size={11 * px}>{label}</text>
               </g>
             {/if}
           {/each}
+          </g>
         </svg>
       {/if}
     </div>
@@ -203,6 +261,12 @@
       <button type="button" aria-label="Previous sheet" data-testid="sheet-prev" disabled={index === 0} onclick={() => step(-1)}>←</button>
       <span>Sheet {index + 1} of {count}</span>
       <button type="button" aria-label="Next sheet" data-testid="sheet-next" disabled={index === count - 1} onclick={() => step(1)}>→</button>
+      <span class="rotate">
+        <button type="button" aria-label="Rotate view left" title="Rotate view left" data-testid="rotate-left" onclick={() => turn(270)}>↺</button>
+        <button type="button" aria-label="Rotate view right" title="Rotate view right" data-testid="rotate-right" onclick={() => turn(90)}>↻</button>
+        <button type="button" data-testid="rotate-reset" disabled={extraTurn === 0} onclick={() => (picked = null)}>Reset</button>
+      </span>
+      <label class="check"><input type="checkbox" bind:checked={marksAsExported} data-testid="marks-preview" /> Show marks as exported</label>
     </div>
     <div class="sides" bind:clientWidth={areaWidth} bind:clientHeight={areaHeight} style:flex-direction={sides.direction} style:gap="{GAP}px">
       {@render side("front", "Front")}
@@ -223,11 +287,18 @@
     flex-direction: column;
     gap: var(--space-3);
   }
+  /* Wraps between controls, never inside one, when the sheet area is narrow. */
   .stepper {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: center;
-    gap: var(--space-3);
+    gap: var(--space-2) var(--space-3);
+    white-space: nowrap;
+  }
+  .rotate {
+    display: flex;
+    gap: var(--space-1);
   }
   .stepper button {
     padding: var(--space-1) var(--space-3);
@@ -247,7 +318,7 @@
     flex-direction: column;
   }
   figcaption {
-    font-size: 12px;
+    font-size: var(--text-sm);
     color: var(--muted);
     text-align: center;
   }
@@ -260,10 +331,10 @@
   }
   .paper {
     fill: var(--surface);
-    stroke: var(--line);
+    stroke: var(--control);
   }
   .placeholder {
-    fill: var(--bg);
+    fill: var(--canvas);
   }
   .hatch {
     stroke: var(--line);
@@ -272,14 +343,17 @@
     stroke: var(--text);
   }
   .fold {
-    stroke: var(--accent);
+    stroke: var(--fold-line);
+  }
+  .mark {
+    stroke: var(--text);
   }
   .badge rect {
     fill: var(--text);
     opacity: 0.75;
   }
   .badge text {
-    fill: #fff;
+    fill: var(--surface);
     font-family: var(--font);
   }
 </style>

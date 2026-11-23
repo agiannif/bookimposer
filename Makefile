@@ -58,7 +58,7 @@ app-check: ## Typecheck the app (svelte-check and tsc)
 app-fixtures: require-pdfium ## Regenerate the app's test PDFs
 	cargo run --quiet -p pdf-export --example make_app_fixtures -- $(CURDIR)/app/e2e/fixtures
 
-app-screenshots: ## Screenshot the workspace into OUT=dir at 1280x800 and 1100x700 (needs 'make app-dev' running)
+app-screenshots: ## Screenshot start, setup and workspace into OUT=dir at 1280x800 and 1100x700 (needs 'make app-dev' running)
 	@test -n "$(OUT)" || { echo "Usage: make app-screenshots OUT=dir" >&2; exit 2; }
 	cd app && node scripts/screenshot-workspace.ts $(abspath $(OUT))
 

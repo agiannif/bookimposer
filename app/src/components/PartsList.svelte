@@ -17,7 +17,7 @@
   <ul>
     {#each rows as row (row.kind)}
       {@const included = !row.board || ws.settings[row.board]}
-      <li class={["row", row.board ? "board" : "body", { included }]}>
+      <li class="row">
         {#if row.board}
           <input type="checkbox" bind:checked={ws.settings[row.board]} aria-label="Include {PART_NAMES[row.kind]}" data-testid={row.testid} />
         {/if}
@@ -32,43 +32,41 @@
 </section>
 
 <style>
+  /* Two columns, checkboxes and names, shared by every row so the names line up whether or not a
+     row has a checkbox. */
   ul {
     list-style: none;
     margin: 0;
     padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-1);
+    display: grid;
+    grid-template-columns: auto 1fr;
+    column-gap: var(--space-2);
+    row-gap: var(--space-1);
+    align-items: center;
   }
   .row {
-    display: flex;
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: subgrid;
     align-items: center;
-    gap: var(--space-2);
-    padding-left: var(--space-2);
-    border-left: 4px solid var(--line);
-    border-radius: var(--radius);
   }
   .row input {
     margin: 0;
   }
-  .row.body {
-    border-left-color: var(--accent);
-    /* lines the body's name up with the boards' names, which sit after a checkbox */
-    padding-left: calc(var(--space-2) + 13px + var(--space-2));
-  }
-  .row.board.included {
-    border-left-color: var(--board);
-  }
   .part {
-    flex: 1;
+    grid-column: 2;
     text-align: left;
-    padding: var(--space-2) var(--space-3);
+    padding: var(--space-1) var(--space-2);
+    border: 0;
+    border-radius: var(--radius);
+    background: none;
   }
   span.part {
     color: var(--muted);
   }
   button.part[aria-pressed="true"] {
-    background: var(--accent-soft);
+    background: var(--hover);
+    color: var(--accent);
     font-weight: 600;
   }
 </style>

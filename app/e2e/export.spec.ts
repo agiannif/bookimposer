@@ -19,14 +19,14 @@ async function exportPdf(page: Page) {
   return download;
 }
 
-test("exporting the worked example downloads a 20 page PDF of letter sheets", async ({ page }) => {
+test("exporting the worked example downloads a 22 page PDF of letter sheets", async ({ page }) => {
   const errors = await openWithBoards(page);
   const download = await exportPdf(page);
   expect(download.suggestedFilename()).toBe("book-76-imposed.pdf");
   const res = await page.request.post("/__dev/page-sizes", { data: readFileSync((await download.path())!) });
   expect(res.ok()).toBe(true);
   const { pageSizes } = await res.json();
-  expect(pageSizes).toHaveLength(20);
+  expect(pageSizes).toHaveLength(22);
   for (const size of pageSizes) expect(size).toEqual({ width: 612, height: 792 });
   await expect(page.getByTestId("export-busy")).toHaveCount(0);
   await expect(page.getByTestId("export-warning")).toHaveCount(0);

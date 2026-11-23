@@ -7,7 +7,8 @@ use crate::{ExportError, PageBoxes, embed, group, load_pdf, marks, page_boxes};
 use pdfium_render::prelude::*;
 use std::collections::BTreeSet;
 
-/// What to draw besides the pages.
+/// What to draw besides the pages: each side's cut and fold marks, front
+/// and back, as the Layout places them.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ExportOptions {
     pub cut_marks: bool,
@@ -74,32 +75,19 @@ pub fn export(
     }
 
     let mut sheets = pdfium.create_new_pdf()?;
-    let marks_wanted = options.cut_marks || options.fold_marks;
-    for (index, sheet) in layout.sheets.iter().enumerate() {
-        let mut front = write_side(pdfium, &mut sheets, &source, &boxes, layout, &sheet.front)?;
-        if marks_wanted {
-            let drawn = marks::draw_marks(
+    for sheet in &layout.sheets {
+        for side in [&sheet.front, &sheet.back] {
+            let mut page = write_side(pdfium, &mut sheets, &source, &boxes, layout, side)?;
+            marks::draw_marks(
                 &sheets,
-                &mut front,
-                sheet,
+                &mut page,
+                &side.marks,
+                &layout.mark_style,
                 &layout.sheet,
                 options.cut_marks,
                 options.fold_marks,
             )?;
-            let number = index + 1;
-            if drawn.skipped > 0 {
-                warnings.push(format!(
-                    "skipped {} cut/fold line(s) on sheet {number} that are not horizontal or vertical",
-                    drawn.skipped
-                ));
-            }
-            if drawn.lines > 0 && drawn.ticks == 0 {
-                warnings.push(format!(
-                    "cut/fold marks would overlap page content on sheet {number}"
-                ));
-            }
         }
-        write_side(pdfium, &mut sheets, &source, &boxes, layout, &sheet.back)?;
     }
     let mut pdf = sheets.save_to_bytes()?;
     // A source lopdf cannot read skips the groups rather than failing an

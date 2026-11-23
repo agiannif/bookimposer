@@ -6,7 +6,7 @@ Status: in development.
 
 == Using the engine
 
-`impose()` takes the PDF's page sizes, the book's parts and the print settings, and returns a `Layout`: where every page lands on each side of each sheet, plus cut and fold lines. All sizes are PDF points.
+`impose()` takes the PDF's page sizes, the book's parts and the print settings, and returns a `Layout`: where every page lands on each side of each sheet, the cut and fold lines, and the cut and fold marks to print on each side. All sizes are PDF points.
 
 This is a 76-page PDF of 4 x 5.25 inch pages, bound as a front board, 9 folio signatures and a back board, printed on US Letter:
 
@@ -16,14 +16,16 @@ import { impose } from './engine/src/index.ts'
 
 const layout = impose({
   pageSizes: Array.from({ length: 76 }, () => ({ width: 288, height: 378 })),
-  parts: [{ type: 'board' }, { type: 'body', signatures: 9, folds: 1 }, { type: 'board' }],
+  parts: [{ type: 'board' }, { type: 'body', signatures: 10, folds: 1 }, { type: 'board' }],
   print: { sheet: { width: 612, height: 792 }, duplex: 'long-edge', margin: 18, gap: 0, bleed: 0 },
   mismatch: 'fit',
 })
 
-layout.sheets.length // 10
+layout.sheets.length // 11
 layout.issues        // [] (errors and warnings, each with a code)
 ----
+
+The PDF is the book as a reader reads it. A front board takes its first two pages, the cover and the inside cover, and a back board its last two, the inside back cover and the back cover. Each board prints as one strip that folds at the fore-edge around the blank first (or last) leaf of the book block and is glued to both sides of it, so that leaf is sewn into the first (or last) signature and hidden. The body is that blank leaf, every page in between, any padding blanks, then the back blank leaf, so body page n is PDF page n. Here it has PDF pages 3 to 74 between two blank leaves, 76 pages, and fills 10 signatures of 8 pages with 4 padding blanks (`layout.body`).
 
 == Setup
 
@@ -38,15 +40,19 @@ make fetch-pdfium
 
 `scripts/impose-pdf` turns a book PDF into a print-ready sheets PDF. Page content is embedded as vector content, never rasterized or re-encoded.
 
-This imposes a 76-page book as a front board, 9 signatures and a back board on US Letter, with cut marks:
+This imposes a 76-page book as a front board, 10 signatures and a back board on US Letter, with cut marks:
 
 [source,sh]
 ----
 scripts/impose-pdf --input book.pdf --output sheets.pdf \
-  --signatures 9 --front-board --back-board --sheet letter --margin 18 --cut-marks
+  --signatures 10 --front-board --back-board --sheet letter --margin 18 --cut-marks
 ----
 
 Other flags: `--folds 1|2|3`, `--sheet letter|a4|tabloid|a3|WxH`, `--gap`, `--bleed`, `--duplex long-edge|short-edge`, `--fold-marks` and `--keep-temp DIR` (keeps the intermediate layout JSON). Layout warnings print to stderr; layout errors stop the run. `scripts/impose-pdf --help` lists everything.
+
+Cut and fold marks are short ticks in the sheet margins, past the ends of each cut and fold line and never over page content. They print on both sides of a sheet, the back's exactly behind the front's, so they show whichever side faces up. Cut marks are solid, spine folds dashed and folds that get trimmed open dotted. A sheet where a kind of mark you asked for has no room gets a warning.
+
+When pieces turn a quarter to fit the sheet, they fill it in the order their pages read: the first piece is the top row as read.
 
 A page's trim size is its TrimBox, or its CropBox when it has none, or its MediaBox.
 
@@ -61,7 +67,7 @@ make app-dev
 
 Open http://127.0.0.1:5173. On a remote box, forward the port first: `ssh -L 5173:127.0.0.1:5173 <host>`.
 
-Choose a book PDF, then set signatures, folds, boards and sheet size (Letter, A4, Tabloid, A3 or custom). The workspace shows the parts and where each page lands, the sheets one at a time with cut and fold lines, and any layout warnings or errors. Everything updates as you change a setting. *Suggest* next to Signatures picks a count for the current folds and boards. A board's panel says what blank filler pieces to cut.
+Choose a book PDF, then set signatures, folds, boards and sheet size (Letter, A4, Tabloid, A3 or custom). The workspace shows the parts and where each page lands, the sheets one at a time with cut and fold lines on both sides (the back's behind the front's), and any layout warnings or errors. A board's blank leaf shows the board's page numbers (1 and 2 at the front, the last two at the back); padding blanks are unnumbered. *Show marks as exported* swaps the lines for the cut and fold marks the export prints, on both sides. Everything updates as you change a setting. *Suggest* next to Signatures picks a count for the current folds and boards. The parts bar marks the blank leaf each board wraps as "+2 blank (cover leaf)" at that end of the body.
 
 *Save project* writes the settings to a `.bookcomposer.json` file. Open it from the start screen and choose the same PDF to continue. *Export PDF* saves `<name>-imposed.pdf` with the page content embedded as vector content, and lists anything the exporter could not carry over, such as annotations. It is disabled while the layout has errors.
 

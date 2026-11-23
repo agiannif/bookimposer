@@ -4,6 +4,6 @@ import assert from "node:assert/strict";
 import { impose } from "../../engine/src/index.ts";
 import { workedExample } from "../../engine/test/fixtures.ts";
 
-test("the engine imposes the worked example into 10 sheets", () => {
-  assert.equal(impose(workedExample()).sheets.length, 10);
+test("the engine imposes the worked example into 11 sheets", () => {
+  assert.equal(impose(workedExample()).sheets.length, 11);
 });

@@ -19,7 +19,7 @@ test('error layouts carry the sheet size too', () => {
 test('CLI prints the layout for a spec on stdin', () => {
   const out = execFileSync('node', [cli], { input: JSON.stringify(workedExample()) }).toString()
   assert.ok(out.endsWith('\n'))
-  assert.equal(JSON.parse(out).sheets.length, 10)
+  assert.equal(JSON.parse(out).sheets.length, 11)
 })
 
 test('CLI exits 1 with a message on invalid JSON', () => {

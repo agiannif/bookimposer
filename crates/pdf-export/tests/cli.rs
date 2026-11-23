@@ -3,8 +3,7 @@
 mod support;
 
 use pdf_export::geometry::to_pdf_rect;
-use pdf_export::layout::{self, Rect};
-use pdf_export::marks::mark_segments;
+use pdf_export::layout;
 use pdfium_render::prelude::PdfPageRenderRotation;
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
@@ -244,7 +243,7 @@ fn export_writes_the_sheets_pdf() {
     assert_eq!(stderr(&output), "");
     let pdf = pdf.unwrap();
     let document = pdfium().load_pdf_from_byte_slice(&pdf, None).unwrap();
-    assert_eq!(document.pages().len(), 20);
+    assert_eq!(document.pages().len(), 22);
 }
 
 #[test]
@@ -291,21 +290,6 @@ fn export_draws_marks_when_asked() {
     assert!(top_left_tick(&marked_pdf) < 200);
 }
 
-#[test]
-fn export_warns_on_stderr_when_a_sheet_has_no_room_for_marks() {
-    let mut layout = worked_example();
-    layout["sheets"][0]["foldLines"] = json!([]);
-    layout["sheets"][0]["cutLines"] = json!([{"x1": 0, "y1": 0, "x2": 612, "y2": 0}]);
-    let (output, pdf) = run_export_of("marks-no-room", &layout, &["--cut-marks"]);
-
-    assert!(output.status.success(), "{}", stderr(&output));
-    assert_eq!(
-        stderr(&output),
-        "warning: cut/fold marks would overlap page content on sheet 1\n"
-    );
-    assert!(pdf.is_some());
-}
-
 /// The repository's `scripts/impose-pdf`, run end to end on the 76-page book
 /// with 9 signatures and boards, checked against its own layout.
 #[test]
@@ -325,7 +309,7 @@ fn impose_pdf_script_exports_the_worked_example() {
         .arg(&input)
         .arg("--output")
         .arg(&sheets)
-        .args(["--signatures", "9", "--front-board", "--back-board"])
+        .args(["--signatures", "10", "--front-board", "--back-board"])
         .args([
             "--sheet",
             "letter",
@@ -347,11 +331,14 @@ fn impose_pdf_script_exports_the_worked_example() {
         layout::parse(&layout_json.unwrap()).unwrap(),
     );
     let document = pdfium().load_pdf_from_byte_slice(&exported, None).unwrap();
-    assert_eq!(document.pages().len(), 20);
+    assert_eq!(document.pages().len(), 22);
 
     let rendered = render(pdfium(), &exported, 0, PX_PER_PT);
     for placement in &layout.sheets[0].front.placements {
-        let pdf_page = placement.pdf_page.unwrap();
+        // Sheet 1 holds the blank leaf the front board wraps; it has no source page to compare.
+        let Some(pdf_page) = placement.pdf_page else {
+            continue;
+        };
         let alone = render(pdfium(), &source, pdf_page as u16, PX_PER_PT);
         assert_images_match(
             &crop_region(
@@ -551,16 +538,66 @@ fn impose_pdf_exports_a_bleed_book_with_marks() {
         }
     }
 
-    // The first cut line's first tick, which lies outside every clip, is dark.
-    let clips: Vec<Rect> = sheet.front.placements.iter().map(|p| p.clip).collect();
-    let tick = mark_segments(&sheet.cut_lines[0], &clips, &layout.sheet)[0];
-    let front = render(pdfium(), &exported, 0, PX_PER_PT);
-    let px = |pt: f64| (pt * f64::from(PX_PER_PT)) as u32;
-    let (x, y) = (px((tick.x1 + tick.x2) / 2.0), px((tick.y1 + tick.y2) / 2.0));
-    let darkest = (y - 1..=y)
-        .flat_map(|y| (x - 1..=x).map(move |x| (x, y)))
-        .map(|(x, y)| front.get_pixel(x, y).0[0])
-        .min()
-        .unwrap();
-    assert!(darkest < 200, "no tick at {tick:?}: {darkest}");
+    // The first cut tick on each side, which lies outside every clip, is dark.
+    for (output_page, side) in [(0, &sheet.front), (1, &sheet.back)] {
+        let tick = side.marks.cut[0];
+        let rendered = render(pdfium(), &exported, output_page, PX_PER_PT);
+        let px = |pt: f64| (pt * f64::from(PX_PER_PT)) as u32;
+        let (x, y) = (px((tick.x1 + tick.x2) / 2.0), px((tick.y1 + tick.y2) / 2.0));
+        let darkest = (y - 1..=y)
+            .flat_map(|y| (x - 1..=x).map(move |x| (x, y)))
+            .map(|(x, y)| rendered.get_pixel(x, y).0[0])
+            .min()
+            .unwrap();
+        assert!(
+            darkest < 200,
+            "no tick at {tick:?} on output page {output_page}: {darkest}"
+        );
+    }
+}
+
+/// `scripts/impose-pdf` on a folio exactly as tall as the sheet: the cuts
+/// get ticks in the side margins, the fold gets none. The warning shows only
+/// when fold marks are asked for.
+#[test]
+fn impose_pdf_warns_about_marks_only_for_the_kinds_asked_for() {
+    let dir = temp_dir("e2e-no-room");
+    let input = dir.join("book.pdf");
+    let pages: Vec<FixturePage> = (1..=8)
+        .map(|label| FixturePage {
+            media: (0.0, 0.0, 288.0, 378.0),
+            trim: None,
+            bleed: None,
+            label,
+        })
+        .collect();
+    std::fs::write(&input, fixture_pdf(pdfium(), &pages)).unwrap();
+    let run_with = |marks: &[&str]| {
+        Command::new(repo().join("scripts/impose-pdf"))
+            .arg("--input")
+            .arg(&input)
+            .arg("--output")
+            .arg(dir.join("sheets.pdf"))
+            .args(["--signatures", "1", "--sheet", "700x378", "--margin", "0"])
+            .args(marks)
+            .output()
+            .unwrap()
+    };
+    let (none, cut, fold) = (
+        run_with(&[]),
+        run_with(&["--cut-marks"]),
+        run_with(&["--fold-marks"]),
+    );
+    std::fs::remove_dir_all(&dir).unwrap();
+
+    for output in [&none, &cut, &fold] {
+        assert!(output.status.success(), "{}", stderr(output));
+    }
+    assert_eq!(stderr(&none), "");
+    assert_eq!(stderr(&cut), "");
+    assert_eq!(
+        stderr(&fold),
+        "warning: Cut/fold marks would overlap page content on sheet 1.\n\
+         warning: Cut/fold marks would overlap page content on sheet 2.\n"
+    );
 }

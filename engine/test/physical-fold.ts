@@ -54,7 +54,7 @@ function cutOut(layout: Layout, spec: BookSpec, errors: string[]): CutPiece[] {
     const root = (i: number): number => (group[i] === i ? i : root(group[i]))
     for (let i = 0; i < fronts.length; i++) {
       for (let j = 0; j < fronts.length; j++) {
-        if (i !== j && sheet.foldLines.some((l) => spans(l, fronts[i].panel, fronts[j].panel))) group[root(i)] = root(j)
+        if (i !== j && sheet.front.guides.fold.some((l) => spans(l, fronts[i].panel, fronts[j].panel))) group[root(i)] = root(j)
       }
     }
     const backs = sheet.back.placements.map((p) => ({
@@ -71,7 +71,7 @@ function cutOut(layout: Layout, spec: BookSpec, errors: string[]): CutPiece[] {
         { x1: trim.x + trim.width, y1: trim.y, x2: trim.x + trim.width, y2: trim.y + trim.height },
       ]
       for (const e of edges) {
-        const cut = sheet.cutLines.some((l) => near(l.x1, e.x1) && near(l.y1, e.y1) && near(l.x2, e.x2) && near(l.y2, e.y2))
+        const cut = sheet.front.guides.cut.some((l) => near(l.x1, e.x1) && near(l.y1, e.y1) && near(l.x2, e.x2) && near(l.y2, e.y2))
         if (!cut) errors.push(`sheet ${si}: trim edge ${JSON.stringify(e)} has no cut line`)
       }
       const xs = [...new Set(members.map((p) => p.panel.x))].sort((a, b) => a - b)
@@ -89,7 +89,7 @@ function cutOut(layout: Layout, spec: BookSpec, errors: string[]): CutPiece[] {
       })
       const partIndexes = new Set(members.map((p: PagePlacement) => p.partIndex))
       if (partIndexes.size > 1) errors.push(`sheet ${si}: one piece mixes parts ${[...partIndexes]}`)
-      const foldLines = sheet.foldLines.filter((l) => inside({ x: l.x1, y: l.y1, width: l.x2 - l.x1, height: l.y2 - l.y1 }, trim))
+      const foldLines = sheet.front.guides.fold.filter((l) => inside({ x: l.x1, y: l.y1, width: l.x2 - l.x1, height: l.y2 - l.y1 }, trim))
       pieces.push({ sheet: si, trim, cells, cols: xs.length, rows: ys.length, partIndex: members[0].partIndex, backs: pieceBacks.length, foldLines })
     }
   })
@@ -209,6 +209,27 @@ function nestedPages(layout: Layout, s: number, k: number, piecePages: number): 
   return [...first, ...last]
 }
 
+// The book as read is the PDF: the boards before the body take its first pages, two each (cover, inside
+// cover), and the boards after it its last pages (inside back cover, back cover).
+function boardPages(spec: BookSpec, partIndex: number): [number, number] {
+  const bodyIndex = spec.parts.findIndex((p) => p.type === 'body')
+  const first = partIndex < bodyIndex ? 2 * partIndex : spec.pageSizes.length - 2 * (spec.parts.length - partIndex)
+  return [first, first + 1]
+}
+
+// The body in book order, from the spec alone. Each board's strip wraps a blank leaf of the book block and is
+// glued to both sides of it: the first leaf with boards before the body, the last with boards after it. In
+// between come the PDF's pages between the boards' pages, then the padding blanks.
+function bookOrder(spec: BookSpec, pages: number): (number | null)[] {
+  const bodyIndex = spec.parts.findIndex((p) => p.type === 'body')
+  const boardsAfter = spec.parts.length - 1 - bodyIndex
+  const leafBefore: null[] = bodyIndex > 0 ? [null, null] : []
+  const leafAfter: null[] = boardsAfter > 0 ? [null, null] : []
+  const content = Array.from({ length: spec.pageSizes.length - 2 * (bodyIndex + boardsAfter) }, (_, i) => 2 * bodyIndex + i)
+  const padding = Math.max(0, pages - leafBefore.length - content.length - leafAfter.length)
+  return [...leafBefore, ...content, ...Array<null>(padding).fill(null), ...leafAfter]
+}
+
 const keyOf = (pages: (number | null)[]) => JSON.stringify([...pages].sort((a, b) => (a ?? -1) - (b ?? -1)))
 
 export interface FoldCheck { pieces: number; errors: string[] }
@@ -225,6 +246,10 @@ export function checkPhysically(spec: BookSpec, layout: Layout): FoldCheck {
   const unclaimed = Array.from({ length: signatures * body.piecesPerSignature }, (_, i) =>
     nestedPages(layout, Math.floor(i / body.piecesPerSignature), i % body.piecesPerSignature, piecePages))
   if (bodyPieces.length !== unclaimed.length) errors.push(`expected ${unclaimed.length} body pieces, found ${bodyPieces.length}`)
+  const order = bookOrder(spec, bodyAlloc.pdfPages.length)
+  if (JSON.stringify(order) !== JSON.stringify(bodyAlloc.pdfPages)) {
+    errors.push(`body pages ${JSON.stringify(bodyAlloc.pdfPages)} are not in book order ${JSON.stringify(order)}`)
+  }
 
   for (const piece of pieces) {
     const isBody = piece.partIndex === bodyAlloc.partIndex
@@ -237,11 +262,16 @@ export function checkPhysically(spec: BookSpec, layout: Layout): FoldCheck {
       if (match < 0) { errors.push(`${where}: pages ${JSON.stringify(pages)} are no piece of any signature`); continue }
       expected = unclaimed.splice(match, 1)[0]
     } else {
-      // A board prints cover and inside cover side by side on the front, folds at the fore-edge, back empty.
-      const pages = layout.allocations[piece.partIndex].pdfPages
+      // A board prints its two pages side by side on the front, back empty, and folds at the fore-edge around
+      // the body's blank first (or last) leaf, so its pages read first and last with the blank back faces,
+      // glued to that leaf, between them. For a front board that is the cover on top and the inside cover,
+      // upright, facing the book block below; for a back board, the inside back cover facing the book block
+      // above and the back cover underneath. The spine must be on the right (the fold at the fore-edge), so a
+      // strip with the cover and inside cover swapped cannot pass by being folded the other way.
       if (piece.backs !== 0) errors.push(`${where}: board has back pages`)
       if (piece.cells.length !== 2) errors.push(`${where}: board has ${piece.cells.length} panels`)
-      expected = [pages[0], null, null, pages[1]]
+      const [first, last] = boardPages(spec, piece.partIndex)
+      expected = [first, null, null, last]
     }
     const wantSpineLeft = isBody
     const folds = Math.log2(piece.cells.length)
