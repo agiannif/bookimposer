@@ -10,7 +10,7 @@ export PLAYWRIGHT_BROWSERS_PATH := $(CURDIR)/app/.playwright-browsers
 PDFIUM_LIB := $(if $(filter Darwin,$(shell uname -s)),libpdfium.dylib,libpdfium.so)
 
 .DEFAULT_GOAL := help
-.PHONY: help layout-fixtures fetch-pdfium test test-engine test-export e2e typecheck lint fmt build release require-pdfium app-dev app-test app-check app-e2e app-browsers app-fixtures app-screenshots export-size-probe tauri-check tauri-test ipc-fixtures
+.PHONY: help layout-fixtures fetch-pdfium test test-engine test-export e2e typecheck lint fmt build release require-pdfium app-dev app-test app-check app-e2e app-browsers app-fixtures app-screenshots app-book-screenshots export-size-probe tauri-check tauri-test ipc-fixtures
 
 help: ## List targets
 	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  %-16s %s\n", $$1, $$2}'
@@ -73,6 +73,10 @@ export-size-probe: require-pdfium ## Export a PAGES-page book (default 300) whos
 app-screenshots: ## Screenshot start, setup and workspace into OUT=dir at 1280x800 and 1100x700 (needs 'make app-dev' running)
 	@test -n "$(OUT)" || { echo "Usage: make app-screenshots OUT=dir" >&2; exit 2; }
 	cd app && node scripts/screenshot-workspace.ts $(abspath $(OUT))
+
+app-book-screenshots: ## Screenshot the 3D book closed and at its first spread into OUT=dir (needs 'make app-dev' running)
+	@test -n "$(OUT)" || { echo "Usage: make app-book-screenshots OUT=dir" >&2; exit 2; }
+	cd app && node scripts/screenshot-book.ts $(abspath $(OUT))
 
 app-browsers: ## Download Playwright's Chromium into app/.playwright-browsers
 	cd app && npx playwright install chromium

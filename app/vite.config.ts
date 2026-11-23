@@ -13,7 +13,9 @@ export default defineConfig(({ command }) => ({
       }]
       : []),
   ],
-  // The app imports the engine sources by relative path, so the dev server serves ../engine too,
-  // and nothing else outside the app.
-  server: { host: "127.0.0.1", port: 5173, strictPort: true, fs: { allow: [".", "../engine/src"] } },
+  // The app imports the engine sources and the assembler by relative path, so the dev server serves
+  // those too, and nothing else outside the app.
+  // Pre-bundled at startup: dependencies the optimizer would only find once the page loads them make it reload the page.
+  optimizeDeps: { include: ["three", "@threlte/core", "@threlte/extras", "@embedpdf/pdfium"] },
+  server: { host: "127.0.0.1", port: 5173, strictPort: true, fs: { allow: [".", "../engine/src", "../assembler"] } },
 }));

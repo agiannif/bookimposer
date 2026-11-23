@@ -13,7 +13,8 @@ export interface BookSpec { pageSizes: Size[]; parts: PartSpec[]; print: PrintSe
 // 'too-many-signatures': some signature would be entirely blank. data.maxSignatures is the most
 // that can hold content; every count above it fails, and so do a few below it, since all
 // signatures are one size.
-export type IssueCode = 'no-body' | 'multiple-bodies' | 'invalid-signatures' | 'no-body-pages'
+// 'too-many-boards': more than one board before or after the body; each wraps the body's first or last leaf.
+export type IssueCode = 'no-body' | 'multiple-bodies' | 'too-many-boards' | 'invalid-signatures' | 'no-body-pages'
   | 'too-many-signatures' | 'piece-does-not-fit' | 'spacing-reduces-fit' | 'page-size-mismatch'
   | 'invalid-page-size' | 'invalid-print-settings' | 'no-room-for-marks'
 export interface Issue { code: IssueCode; severity: 'error' | 'warning'; message: string; data?: Record<string, number | number[] | boolean> }
@@ -78,7 +79,48 @@ export interface SideMarks { cut: SheetLine[]; fold: FoldLine[] }
  */
 export interface SheetSide { placements: PagePlacement[]; guides: SideMarks; marks: SideMarks }
 export interface Sheet { front: SheetSide; back: SheetSide }
-/** The imposition of a whole book. On an error issue, `sheets` is empty. */
+/** An edge or half of a piece as it lies on the sheet front. */
+export type PieceSide = 'left' | 'right' | 'top' | 'bottom'
+/**
+ * One fold of a piece. The piece lies on the table front face up, as it lay on the sheet, and is never turned
+ * over or around while it is folded. `line` is the crease in the piece's trim coordinates (origin at its slot's
+ * top-left, axes as on the sheet front): it runs across the whole stack folded so far and halves it. The
+ * `moves` half (left or right of a vertical line, top or bottom of a horizontal one) turns over onto the other
+ * half, which stays where it is: under it for a `mountain` fold, over it for a `valley` fold, seen from above,
+ * that is from the sheet's front face. `opensByTrim` says the crease is trimmed open after folding; the one
+ * that is not is the spine (a board's fold is at the fore-edge, around its leaf).
+ */
+export interface AssemblyFold { order: number; line: SheetLine; moves: PieceSide; direction: 'mountain' | 'valley'; opensByTrim: boolean }
+/**
+ * One cut piece. `slot` is its trim rect on the sheet front (cut along it; bleed falls away). `cols` and `rows`
+ * count its panels across and down as it lies on the sheet front. `turned`: the piece's pages have their top
+ * toward the sheet's right edge, so after its last fold the section is turned a quarter counter-clockwise (seen
+ * from above) before it is used. Folded by `folds` in `order`, and turned if `turned`, a body piece is a section
+ * with its spine on the left, its first page on top and every page upright; a board is a strip folded at the
+ * fore-edge, with its first page on top and its second underneath, both upright.
+ */
+export interface AssemblyPiece {
+  id: number; sheet: number; slot: Rect; cols: number; rows: number; turned: boolean; partIndex: number
+  kind: 'body' | 'board'; folds: AssemblyFold[]
+}
+/**
+ * How to make the book from the printed sheets; with the placements it is all a builder needs. Turn a sheet over
+ * about its `flipAxis` (a line through the sheet front, as the duplex flip turns it) to see the back as printed.
+ * Cut out each of `pieces` and fold it. Each of `signatures` (in reading order) is made by nesting each listed
+ * piece's folded section inside the previous one's, outermost first. The book block is gathered in `order`,
+ * each step naming an index into `signatures` or `boards`, top of the book first. A board is not stacked: its
+ * strip folds at the fore-edge around the `wraps` leaf (the first or last leaf of that signature), its top half
+ * above that leaf and its bottom half below it, glued to both sides, so that leaf and the board's blank backs
+ * are hidden. `position` 'front' boards come before the signature they wrap in `order`, 'back' ones after.
+ */
+export interface Assembly {
+  flipAxis: 'vertical' | 'horizontal'
+  pieces: AssemblyPiece[]
+  signatures: { partIndex: number; pieces: number[] }[]
+  boards: { pieceId: number; position: 'front' | 'back'; wraps: { signature: number; leaf: 'first' | 'last' } }[]
+  order: { kind: 'board' | 'signature'; index: number }[]
+}
+/** The imposition of a whole book. On an error issue, `sheets` is empty and `assembly` null. */
 export interface Layout {
   /** The sheet size every side uses. 0x0 on an error layout whose print settings have no valid sheet size. */
   sheet: Size
@@ -89,4 +131,5 @@ export interface Layout {
   issues: Issue[]
   /** How every side's `marks` are drawn. */
   markStyle: MarkStyle
+  assembly: Assembly | null
 }

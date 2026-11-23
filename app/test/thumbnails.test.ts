@@ -119,6 +119,16 @@ test("widths round up to a multiple of 64, capped at 1024", () => {
   ]);
 });
 
+test("a cache made with a larger width cap renders up to it", () => {
+  const worker = new FakeWorker();
+  const cache = new ThumbnailCache(worker, undefined, 2048);
+  cache.get(0, 1500);
+  cache.get(1, 5000);
+  assert.deepEqual(worker.renders(), [{ page: 0, width: 1536 }]);
+  worker.renderLast("page 0");
+  assert.deepEqual(worker.renders(), [{ page: 0, width: 1536 }, { page: 1, width: 2048 }]);
+});
+
 test("a cached page and width bucket is served without rendering again", async () => {
   const { worker, cache } = setup();
   const first = await rendered(cache, worker, 0, "A");

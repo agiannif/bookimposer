@@ -153,7 +153,80 @@ pub struct PerSheet {
     pub sheets: usize,
 }
 
-/// The imposition of a whole book. On an error issue, `sheets` is empty.
+/// One fold of a piece lying front face up as on the sheet: the `moves`
+/// half ("left", "right", "top" or "bottom") turns over about `line` (piece
+/// trim coordinates) under ("mountain") or over ("valley") the other half.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AssemblyFold {
+    pub order: usize,
+    pub line: SheetLine,
+    pub moves: String,
+    pub direction: String,
+    pub opens_by_trim: bool,
+}
+
+/// One cut piece: its trim rect on the sheet front and how it folds.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AssemblyPiece {
+    pub id: usize,
+    pub sheet: usize,
+    pub slot: Rect,
+    pub cols: usize,
+    pub rows: usize,
+    pub turned: bool,
+    pub part_index: usize,
+    pub kind: String,
+    pub folds: Vec<AssemblyFold>,
+}
+
+/// The pieces nested into one signature, outermost first.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SignatureNest {
+    pub part_index: usize,
+    pub pieces: Vec<usize>,
+}
+
+/// The leaf a board's strip folds around: "first" or "last" of a signature.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BoardWrap {
+    pub signature: usize,
+    pub leaf: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AssemblyBoard {
+    pub piece_id: usize,
+    pub position: String,
+    pub wraps: BoardWrap,
+}
+
+/// One step of the gathering order: an index into `signatures` or `boards`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GatherStep {
+    pub kind: String,
+    pub index: usize,
+}
+
+/// How to make the book from the printed sheets (see `Assembly` in
+/// engine/src/types.ts). The exporter does not use it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Assembly {
+    pub flip_axis: String,
+    pub pieces: Vec<AssemblyPiece>,
+    pub signatures: Vec<SignatureNest>,
+    pub boards: Vec<AssemblyBoard>,
+    pub order: Vec<GatherStep>,
+}
+
+/// The imposition of a whole book. On an error issue, `sheets` is empty
+/// and `assembly` is None.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Layout {
@@ -166,6 +239,8 @@ pub struct Layout {
     pub issues: Vec<Issue>,
     /// How every side's `marks` are drawn.
     pub mark_style: MarkStyle,
+    /// None on an error layout.
+    pub assembly: Option<Assembly>,
 }
 
 /// A Layout that could not be read. The message names the offending field

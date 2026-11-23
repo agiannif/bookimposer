@@ -66,7 +66,7 @@
   }
 
   function onkeydown(e: KeyboardEvent) {
-    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
     if (e.target instanceof Element && e.target.closest("input, textarea, select, [contenteditable]")) return;
     if (e.key === "ArrowRight") step(1);
     else if (e.key === "ArrowLeft") step(-1);

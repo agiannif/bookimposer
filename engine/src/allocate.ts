@@ -21,7 +21,7 @@ const LEAF_PAGES = 2
 
 /**
  * The blank pages of the leaves the boards wrap: the body's first leaf when a board comes before it, its last
- * leaf when one comes after it. Each side gets one leaf however many boards it has.
+ * leaf when one comes after it.
  */
 function boardLeafPages(parts: PartSpec[]): LeafPages {
   const bodyIndex = parts.findIndex((p) => p.type === 'body')
@@ -55,6 +55,10 @@ export function allocatePages(spec: BookSpec): AllocationResult {
     return failure({ code: 'multiple-bodies', severity: 'error', message: 'The book can only have one body.' })
   }
   const bodyIndex = bodyIndexes[0]
+  // Each board wraps the body's first or last leaf, so a side has room for one.
+  if (bodyIndex > 1 || spec.parts.length - 1 - bodyIndex > 1) {
+    return failure({ code: 'too-many-boards', severity: 'error', message: 'The book can have at most one board before and one after the body.' })
+  }
   const bodyPart = spec.parts[bodyIndex]
   if (bodyPart.type !== 'body') throw new Error('unreachable')
   const { signatures, folds } = bodyPart

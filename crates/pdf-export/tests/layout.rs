@@ -20,6 +20,17 @@ fn parses_the_engine_worked_example() {
     assert_eq!(first.rotation, 0);
     assert!(layout.sheets[10].back.placements.is_empty());
     assert_eq!(layout.sheets[0].front.guides.fold.len(), 2);
+    let assembly = layout.assembly.as_ref().unwrap();
+    assert_eq!(assembly.flip_axis, "vertical");
+    assert_eq!(assembly.pieces.len(), 22);
+    let fold = &assembly.pieces[0].folds[0];
+    assert_eq!(
+        (fold.moves.as_str(), fold.direction.as_str()),
+        ("left", "mountain")
+    );
+    assert_eq!(assembly.signatures[0].pieces, vec![0, 1]);
+    assert_eq!(assembly.boards[0].wraps.leaf, "first");
+    assert_eq!(assembly.order.len(), 12);
 }
 
 #[test]

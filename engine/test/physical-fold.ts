@@ -2,12 +2,9 @@
 // engine's own folding code: it finds each piece on the printed sheet, cuts it out, tries every way of
 // folding it by hand, and reports what does not come out as a readable book.
 import type { BookSpec, FoldLine, Layout, PagePlacement, Rect } from '../src/index.ts'
+import { boundingBox, EPS, inside, near, neg, sameRect, upFor } from '../../assembler/geometry.ts'
+import type { Vec } from '../../assembler/geometry.ts'
 
-const EPS = 1e-6
-const near = (a: number, b: number) => Math.abs(a - b) < EPS
-const sameRect = (a: Rect, b: Rect) => near(a.x, b.x) && near(a.y, b.y) && near(a.width, b.width) && near(a.height, b.height)
-const inside = (a: Rect, t: Rect) =>
-  a.x >= t.x - EPS && a.y >= t.y - EPS && a.x + a.width <= t.x + t.width + EPS && a.y + a.height <= t.y + t.height + EPS
 const overlaps = (a: Rect, b: Rect) =>
   a.x < b.x + b.width - EPS && b.x < a.x + a.width - EPS && a.y < b.y + b.height - EPS && b.y < a.y + a.height - EPS
 
@@ -15,13 +12,10 @@ const overlaps = (a: Rect, b: Rect) =>
 // a lower face (back). A face records its page and the direction of the page's "up" as a vector in y-down
 // coordinates. Upper faces are seen from above. Lower faces are seen from below, which mirrors x, so their
 // vectors live in a mirrored frame. `z` is the layer in the folded stack, 0 on top.
-type Vec = [number, number]
 interface Face { page: number | null; up: Vec }
 interface Cell { id: number; x: number; y: number; z: number; upper: Face; lower: Face; panel: Rect }
 
 const BLANK: Vec = [0, 0]
-const upFor = (rotation: number): Vec => (rotation === 0 ? [0, -1] : rotation === 90 ? [1, 0] : rotation === 180 ? [0, 1] : [-1, 0])
-const neg = (v: Vec): Vec => [-v[0] + 0, -v[1] + 0]
 const clone = (cells: Cell[]) => cells.map((c) => ({ ...c, upper: { ...c.upper }, lower: { ...c.lower } }))
 
 interface CutPiece { sheet: number; trim: Rect; cells: Cell[]; cols: number; rows: number; partIndex: number; backs: number; foldLines: FoldLine[] }
@@ -34,12 +28,6 @@ const spans = (line: FoldLine, a: Rect, b: Rect): boolean => {
     return near(line.y1, b.y) && near(line.y2, b.y) && line.x1 <= a.x + EPS && line.x2 >= a.x + a.width - EPS
   }
   return false
-}
-
-const boundingBox = (rects: Rect[]): Rect => {
-  const x = Math.min(...rects.map((r) => r.x))
-  const y = Math.min(...rects.map((r) => r.y))
-  return { x, y, width: Math.max(...rects.map((r) => r.x + r.width)) - x, height: Math.max(...rects.map((r) => r.y + r.height)) - y }
 }
 
 // Pieces are the groups of front panels joined by fold lines; touching pieces meet at cut lines only.

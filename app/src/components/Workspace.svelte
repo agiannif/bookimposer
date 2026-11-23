@@ -6,6 +6,7 @@
   import { sha256Hex } from "../lib/hash.ts";
   import type { BookWorkspace } from "../lib/workspace.svelte.ts";
   import AllocationBar from "./AllocationBar.svelte";
+  import BookPreview from "./BookPreview.svelte";
   import ExportBar from "./ExportBar.svelte";
   import IssueBanner from "./IssueBanner.svelte";
   import PartSettings from "./PartSettings.svelte";
@@ -22,6 +23,9 @@
   let selected: PartKind = $state("body");
   // A removed board can't stay selected; fall back to the body, which always exists.
   const part = $derived(parts.find((p) => p.kind === selected) ?? parts.find((p) => p.kind === "body")!);
+
+  /** The 3D book takes as much width as the sheets when larger. */
+  let wideBook = $state(false);
 
   let saveError: string | null = $state(null);
   async function saveProject() {
@@ -68,7 +72,7 @@
     <IssueBanner issues={ws.issues} />
   </div>
 
-  <div class="columns">
+  <div class="columns" class:wide-book={wideBook}>
     <aside class="left">
       <PartsList {ws} bind:selected />
       <section class="panel" aria-labelledby="print-heading">
@@ -82,10 +86,9 @@
     <section class="sheets" aria-label="Sheets" data-testid="sheet-area">
       <SheetView {layout} pdf={ws.pdf!.bytes} boxes={ws.pdf!.boxes} marks={{ cut: ws.settings.cutMarks, fold: ws.settings.foldMarks }} />
     </section>
-    <!-- A slim rail until the 3D preview lands, so the sheets get the width. -->
-    <section class="preview" aria-label="3D preview" data-testid="preview-3d">
-      <span class="hint">3D preview · coming soon</span>
-    </section>
+    <div class="preview">
+      <BookPreview layout={layout} pdf={ws.pdf!.bytes} boxes={ws.pdf!.boxes} {backend} bind:wide={wideBook} />
+    </div>
   </div>
 </div>
 
@@ -137,7 +140,10 @@
     flex: 1;
     min-height: 0;
     display: grid;
-    grid-template-columns: 240px 260px minmax(0, 1fr) 32px;
+    grid-template-columns: 240px 260px minmax(0, 1fr) 320px;
+  }
+  .columns.wide-book {
+    grid-template-columns: 240px 260px minmax(0, 1fr) minmax(0, 1fr);
   }
   .left, .middle {
     min-height: 0;
@@ -152,14 +158,7 @@
     padding: var(--space-4);
   }
   .preview {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--surface);
+    min-height: 0;
     border-left: 1px solid var(--line);
-  }
-  .preview span {
-    writing-mode: vertical-rl;
-    white-space: nowrap;
   }
 </style>

@@ -4,6 +4,9 @@ import { defineConfig } from "@playwright/test";
 // (BOOKCOMPOSER_DEV_EXPORT_FAIL=1, read only by dev/exporter-middleware.ts). `make app-dev` never sets it.
 export default defineConfig({
   testDir: "e2e",
+  // WebGL (the 3D book) on SwiftShader: Chromium's default headless GL logs "GPU stall due to ReadPixels"
+  // console warnings, which every spec counts as errors.
+  use: { launchOptions: { args: ["--use-angle=swiftshader"] } },
   projects: [
     { name: "app", testIgnore: "export-failure.spec.ts", use: { baseURL: "http://127.0.0.1:5173" } },
     { name: "export-failure", testMatch: "export-failure.spec.ts", use: { baseURL: "http://127.0.0.1:5174" } },

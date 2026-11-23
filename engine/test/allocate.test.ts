@@ -99,12 +99,16 @@ test('an absurd signature count is refused at once', () => {
   assert.deepEqual(r.issues[0]?.data, { bodyPages: 76, maxSignatures: 19 })
 })
 
-test('multiple boards on each side keep list order and share one blank leaf per side', () => {
-  const r = allocatePages(workedExample({
-    pageSizes: pages(12),
-    parts: [{ type: 'board' }, { type: 'board' }, body(1, 1), { type: 'board' }, { type: 'board' }],
-  }))
-  assert.deepEqual(r.allocations.map(a => a.pdfPages), [[0, 1], [2, 3], [...leaf, 4, 5, 6, 7, ...leaf], [8, 9], [10, 11]])
+test('more than one board on a side is an error', () => {
+  for (const parts of [
+    [{ type: 'board' }, { type: 'board' }, body(2, 1)],
+    [body(2, 1), { type: 'board' }, { type: 'board' }],
+  ] as PartSpec[][]) {
+    const r = allocatePages(workedExample({ pageSizes: pages(16), parts }))
+    assert.deepEqual(r.allocations, [])
+    assert.equal(r.body, null)
+    assert.deepEqual(r.issues.map(i => [i.code, i.severity]), [['too-many-boards', 'error']])
+  }
 })
 
 test('too few pages for a body is an error', () => {

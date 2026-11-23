@@ -1,3 +1,5 @@
+import type { SheetLine } from './types.ts'
+
 export interface Rect { x: number; y: number; width: number; height: number }
 
 export type Rotation = 0 | 90 | 180 | 270
@@ -42,6 +44,13 @@ export function compose(outer: Affine, inner: Affine): Affine {
 export function applyPoint(m: Affine, x: number, y: number): { x: number; y: number } {
   // + 0 turns -0 into 0
   return { x: m.a * x + m.c * y + m.e + 0, y: m.b * x + m.d * y + m.f + 0 }
+}
+
+// Segment between two points, mapped by m and ordered so x1 <= x2 and y1 <= y2.
+export function mapSegment(m: Affine, x1: number, y1: number, x2: number, y2: number): SheetLine {
+  const a = applyPoint(m, x1, y1)
+  const b = applyPoint(m, x2, y2)
+  return { x1: Math.min(a.x, b.x), y1: Math.min(a.y, b.y), x2: Math.max(a.x, b.x), y2: Math.max(a.y, b.y) }
 }
 
 // Axis-aligned bounding box of the transformed rect.

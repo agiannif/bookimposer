@@ -11,6 +11,20 @@ export interface TemplateCell {
   rotation: 0 | 180
 }
 
+/**
+ * One fold as made by hand, in panel units of the flat piece lying front face up: the crease is the line at
+ * `at` along `axis` (a column or row boundary), from `from` to `to` along the other axis. The `moves` half
+ * turns over onto the other, which stays put: under it for 'mountain', over it for 'valley', seen from above.
+ */
+export interface FoldStep {
+  axis: FoldDirection
+  at: number
+  from: number
+  to: number
+  moves: 'left' | 'right' | 'top' | 'bottom'
+  direction: 'mountain' | 'valley'
+}
+
 /** Cells are in front-view row-major order. In the back view a cell at front column c is at column cols - 1 - c. */
 export interface PieceTemplate {
   cols: number
@@ -19,6 +33,8 @@ export interface PieceTemplate {
   cells: TemplateCell[]
   /** Internal boundaries of the flat piece. `fold` is the 0-based index into `folds` of the fold that creates it. */
   boundaries: { axis: FoldDirection; index: number; fold: number }[]
+  /** The folds that give `cells` their pages, in order: each puts the left/top half under the right/bottom half. */
+  steps: FoldStep[]
 }
 
 export function rightAngleFolds(folds: FoldCount): FoldDirection[] {
@@ -66,11 +82,24 @@ export function foldTemplate(folds: FoldDirection[]): PieceTemplate {
     }
   }
 
+  // The folded stack covers w x h panels of the flat piece from (left, top): the halves that stay put.
   let w = cols
   let h = rows
+  let left = 0
+  let top = 0
   let depth = 1
+  const steps: FoldStep[] = []
   for (const [k, fold] of folds.entries()) {
     claimBoundaries(k, fold, (fold === 'vertical' ? w : h) / 2)
+    // The step says what the loop below does: the left (top) half moves, and `z = 2 * depth - 1 - z` puts it
+    // under the stack that stays (z 0 is the top), which is a mountain fold seen from above.
+    if (fold === 'vertical') {
+      steps.push({ axis: fold, at: left + w / 2, from: top, to: top + h, moves: 'left', direction: 'mountain' })
+      left += w / 2
+    } else {
+      steps.push({ axis: fold, at: top + h / 2, from: left, to: left + w, moves: 'top', direction: 'mountain' })
+      top += h / 2
+    }
     for (const p of panels) {
       if (fold === 'vertical') {
         if (p.x < w / 2) {
@@ -107,5 +136,5 @@ export function foldTemplate(folds: FoldDirection[]): PieceTemplate {
     }
   })
   boundaries.sort((a, b) => (a.axis === b.axis ? a.index - b.index : a.axis === 'vertical' ? -1 : 1))
-  return { cols, rows, folds, cells, boundaries }
+  return { cols, rows, folds, cells, boundaries, steps }
 }

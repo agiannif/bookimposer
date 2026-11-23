@@ -1,5 +1,6 @@
-import { applyPoint, applyRect, compose, identity, mirrorX, rotateCw, rotationOf, translate } from './geometry.ts'
+import { applyRect, compose, identity, mapSegment, mirrorX, rotateCw, rotationOf, translate } from './geometry.ts'
 import type { Affine } from './geometry.ts'
+import { assemblyPiece, gathering } from './assembly.ts'
 import { allocatePages } from './allocate.ts'
 import { validateSpec, validSheet } from './validate.ts'
 import { fitPieces, pieceSize } from './fit.ts'
@@ -8,14 +9,16 @@ import { MARK_STYLE, sheetMarks } from './marks.ts'
 import { boardPiece, bodyPieces } from './pieces.ts'
 import type { PanelAssignment, Piece } from './pieces.ts'
 import type { Rect, Rotation } from './geometry.ts'
-import type { BookSpec, DuplexFlip, MismatchPolicy, FoldLine, Issue, Layout, PagePlacement, Sheet, SheetLine, SideMarks, Size } from './types.ts'
+import type {
+  Assembly, AssemblyPiece, BookSpec, DuplexFlip, MismatchPolicy, FoldLine, Issue, Layout, PagePlacement, Sheet, SheetLine, SideMarks, Size,
+} from './types.ts'
 
 // An unusable sheet size (missing, NaN, infinite, not positive) becomes 0x0 so the JSON stays readable.
 const emptyLayout = (
   rawSheet: Size | undefined, issues: Issue[], allocations: Layout['allocations'] = [], body: Layout['body'] = null,
 ): Layout => ({
   sheet: validSheet(rawSheet) ? rawSheet : { width: 0, height: 0 },
-  sheets: [], allocations, body, perSheet: [], issues, markStyle: MARK_STYLE,
+  sheets: [], allocations, body, perSheet: [], issues, markStyle: MARK_STYLE, assembly: null,
 })
 
 interface Group { cols: number; rows: number; pieces: Piece[] }
@@ -79,35 +82,35 @@ function placementsOf(
   })
 }
 
-// Segment between two piece-local points, mapped to the sheet and ordered so x1 <= x2 and y1 <= y2.
-function sheetLine(m: Affine, x1: number, y1: number, x2: number, y2: number): SheetLine {
-  const a = applyPoint(m, x1, y1)
-  const b = applyPoint(m, x2, y2)
-  return { x1: Math.min(a.x, b.x), y1: Math.min(a.y, b.y), x2: Math.max(a.x, b.x), y2: Math.max(a.y, b.y) }
-}
-
 const LINE_TOLERANCE = 1e-6
 
 const sameLine = (a: SheetLine, b: SheetLine) =>
   Math.abs(a.x1 - b.x1) < LINE_TOLERANCE && Math.abs(a.y1 - b.y1) < LINE_TOLERANCE
   && Math.abs(a.x2 - b.x2) < LINE_TOLERANCE && Math.abs(a.y2 - b.y2) < LINE_TOLERANCE
 
+// The line through the sheet front that the duplex flip turns the sheet over about: the long edge's
+// direction for a long-edge flip, the short edge's for a short-edge one.
+const flipAxisOf = (sheet: Size, duplex: DuplexFlip): Assembly['flipAxis'] =>
+  (duplex === 'long-edge') === (sheet.height >= sheet.width) ? 'vertical' : 'horizontal'
+
 // Maps a point on the front to the point behind it, as seen looking at the back. A vertical flip axis
 // mirrors x; a horizontal one (long edge on a landscape sheet, short edge on a portrait one) also turns
 // the whole back 180 degrees, which mirrors y instead.
 function behindFront(sheet: Size, duplex: DuplexFlip): Affine {
-  const verticalAxis = (duplex === 'long-edge') === (sheet.height >= sheet.width)
   const mirrored = mirrorX(sheet.width)
-  return verticalAxis ? mirrored : compose(rotateCw(180, sheet.width, sheet.height), mirrored)
+  return flipAxisOf(sheet, duplex) === 'vertical' ? mirrored : compose(rotateCw(180, sheet.width, sheet.height), mirrored)
 }
 
 function linesBehind(lines: SideMarks, flip: Affine): SideMarks {
-  const behind = (l: SheetLine) => sheetLine(flip, l.x1, l.y1, l.x2, l.y2)
+  const behind = (l: SheetLine) => mapSegment(flip, l.x1, l.y1, l.x2, l.y2)
   return { cut: lines.cut.map(behind), fold: lines.fold.map((f) => ({ ...behind(f), opensByTrim: f.opensByTrim })) }
 }
 
-function buildSheet(pieces: Piece[], fit: SlotFit, size: Size, panel: Size, spec: BookSpec): Sheet {
+function buildSheet(
+  pieces: Piece[], ids: number[], sheetIndex: number, fit: SlotFit, size: Size, panel: Size, spec: BookSpec,
+): { sheet: Sheet; assembly: AssemblyPiece[] } {
   const { sheet: sheetSize, duplex, bleed } = spec.print
+  const assembly = pieces.map((piece, i) => assemblyPiece(piece, ids[i], sheetIndex, fit.slots[i], fit.rotated, panel, bleed))
   const frontPlacements: PagePlacement[] = []
   const backPlacements: PagePlacement[] = []
   const cutLines: SheetLine[] = []
@@ -121,17 +124,17 @@ function buildSheet(pieces: Piece[], fit: SlotFit, size: Size, panel: Size, spec
     const backTransform = compose(flip, compose(frontTransform, mirrorX(pw)))
     const trim = { x1: bleed, y1: bleed, x2: bleed + piece.cols * panel.width, y2: bleed + piece.rows * panel.height }
     const edges = [
-      sheetLine(frontTransform, trim.x1, trim.y1, trim.x2, trim.y1),
-      sheetLine(frontTransform, trim.x1, trim.y2, trim.x2, trim.y2),
-      sheetLine(frontTransform, trim.x1, trim.y1, trim.x1, trim.y2),
-      sheetLine(frontTransform, trim.x2, trim.y1, trim.x2, trim.y2),
+      mapSegment(frontTransform, trim.x1, trim.y1, trim.x2, trim.y1),
+      mapSegment(frontTransform, trim.x1, trim.y2, trim.x2, trim.y2),
+      mapSegment(frontTransform, trim.x1, trim.y1, trim.x1, trim.y2),
+      mapSegment(frontTransform, trim.x2, trim.y1, trim.x2, trim.y2),
     ]
     // Touching pieces (gap 0, bleed 0) share an edge; it is cut once.
     for (const edge of edges) if (!cutLines.some((l) => sameLine(l, edge))) cutLines.push(edge)
     for (const fold of piece.foldLines) {
       const line = fold.axis === 'vertical'
-        ? sheetLine(frontTransform, bleed + fold.index * panel.width, trim.y1, bleed + fold.index * panel.width, trim.y2)
-        : sheetLine(frontTransform, trim.x1, bleed + fold.index * panel.height, trim.x2, bleed + fold.index * panel.height)
+        ? mapSegment(frontTransform, bleed + fold.index * panel.width, trim.y1, bleed + fold.index * panel.width, trim.y2)
+        : mapSegment(frontTransform, trim.x1, bleed + fold.index * panel.height, trim.x2, bleed + fold.index * panel.height)
       foldLines.push({ ...line, opensByTrim: fold.opensByTrim })
     }
     frontPlacements.push(...placementsOf(piece.front, piece, frontTransform, panel, bleed, spec))
@@ -140,10 +143,11 @@ function buildSheet(pieces: Piece[], fit: SlotFit, size: Size, panel: Size, spec
   // Ticks are placed against the front's clips: every piece has front placements, while board backs have none.
   const frontMarks = sheetMarks(cutLines, foldLines, frontPlacements.map((p) => p.clip), sheetSize)
   const frontGuides = { cut: cutLines, fold: foldLines }
-  return {
+  const sheet = {
     front: { placements: frontPlacements, guides: frontGuides, marks: frontMarks },
     back: { placements: backPlacements, guides: linesBehind(frontGuides, flip), marks: linesBehind(frontMarks, flip) },
   }
+  return { sheet, assembly }
 }
 
 // A warning for each sheet where a kind of line got no ticks at all. Reads the front only: the back's guides and
@@ -195,7 +199,9 @@ export function impose(spec: BookSpec): Layout {
     })
   }
 
+  const ids = new Map(pieces.map((piece, id) => [piece, id]))
   const sheets: Sheet[] = []
+  const assemblyPieces: AssemblyPiece[] = []
   const perSheet: Layout['perSheet'] = []
   for (const group of groupBySize(pieces)) {
     const size = pieceSize(group.cols, group.rows, panel, bleed)
@@ -217,7 +223,10 @@ export function impose(spec: BookSpec): Layout {
     }
     let count = 0
     for (let start = 0; start < group.pieces.length; start += fit.perSheet) {
-      sheets.push(buildSheet(group.pieces.slice(start, start + fit.perSheet), fit, size, panel, spec))
+      const onSheet = group.pieces.slice(start, start + fit.perSheet)
+      const built = buildSheet(onSheet, onSheet.map((p) => ids.get(p)!), sheets.length, fit, size, panel, spec)
+      sheets.push(built.sheet)
+      assemblyPieces.push(...built.assembly)
       count++
     }
     perSheet.push({
@@ -227,5 +236,9 @@ export function impose(spec: BookSpec): Layout {
     })
   }
   issues.push(...noRoomForMarks(sheets))
-  return { sheet: spec.print.sheet, sheets, allocations, body, perSheet, issues, markStyle: MARK_STYLE }
+  const assembly = gathering(
+    spec.parts, bodyIndex, pieces.length - boards.length, body.piecesPerSignature, assemblyPieces,
+    flipAxisOf(spec.print.sheet, spec.print.duplex),
+  )
+  return { sheet: spec.print.sheet, sheets, allocations, body, perSheet, issues, markStyle: MARK_STYLE, assembly }
 }

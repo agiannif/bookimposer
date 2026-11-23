@@ -22,6 +22,7 @@ const failedLayout = (): Layout => ({
   perSheet: [],
   issues: [],
   markStyle: MARK_STYLE,
+  assembly: null,
 });
 
 /**

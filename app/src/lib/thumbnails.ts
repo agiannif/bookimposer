@@ -33,21 +33,22 @@ export function startThumbnailWorker(): Worker {
 }
 
 const BUCKET = 64;
+/** The default width cap: enough for a page on screen. */
 const MAX_WIDTH = 1024;
 
 /** 256 MB of RGBA pixels, about 750 letter-size thumbnails at 256 px wide. */
 const DEFAULT_MAX_BYTES = 256 * 1024 * 1024;
 
 /**
- * The render width for a requested width: rounded up to a multiple of 64, at most 1024.
+ * The render width for a requested width: rounded up to a multiple of 64, at most `maxWidth`.
  * A width that isn't a positive number is a caller bug (an unmeasured element, say), so it
  * throws instead of being clamped into a thumbnail nobody can see.
  */
-function bucketed(widthPx: number): number {
+function bucketed(widthPx: number, maxWidth: number): number {
   if (!Number.isFinite(widthPx) || widthPx <= 0) {
     throw new RangeError(`Thumbnail width must be a positive number, not ${widthPx}`);
   }
-  return Math.min(MAX_WIDTH, Math.max(BUCKET, Math.ceil(widthPx / BUCKET) * BUCKET));
+  return Math.min(maxWidth, Math.max(BUCKET, Math.ceil(widthPx / BUCKET) * BUCKET));
 }
 
 const bytesOf = (bitmap: ImageBitmap) => bitmap.width * bitmap.height * 4;
@@ -83,7 +84,7 @@ function cancelled(): DOMException {
 
 /**
  * Renders PDF pages to `ImageBitmap`s through the worker and caches them by
- * page and width bucket, keeping the most recently used within `maxBytes` of
+ * page and width bucket (at most `maxWidth`, a multiple of 64), keeping the most recently used within `maxBytes` of
  * pixels (4 bytes each). The newest bitmap is always kept, even alone over budget.
  *
  * An evicted bitmap is closed, freeing its memory at once, unless its page was
@@ -105,6 +106,7 @@ function cancelled(): DOMException {
 export class ThumbnailCache {
   #worker: ThumbnailWorker;
   #maxBytes: number;
+  #maxWidth: number;
   /** Map order is recency order: the first key is the least recently used. */
   #bitmaps = new Map<string, { page: number; bitmap: ImageBitmap }>();
   #bytes = 0;
@@ -118,9 +120,10 @@ export class ThumbnailCache {
   #loads = new Map<number, { resolve(): void; reject(error: unknown): void }>();
   #nextId = 0;
 
-  constructor(worker: ThumbnailWorker, maxBytes = DEFAULT_MAX_BYTES) {
+  constructor(worker: ThumbnailWorker, maxBytes = DEFAULT_MAX_BYTES, maxWidth = MAX_WIDTH) {
     this.#worker = worker;
     this.#maxBytes = maxBytes;
+    this.#maxWidth = maxWidth;
     worker.onmessage = (event) => this.#receive(event.data);
     worker.onerror = (event) => this.#fail(event.message || "the preview worker stopped");
     worker.onmessageerror = () => this.#fail("the preview worker sent an unreadable reply");
@@ -146,12 +149,12 @@ export class ThumbnailCache {
     });
   }
 
-  /** The 0-based `pdfPage` rendered at `widthPx` rounded up to a multiple of 64, at most 1024. */
+  /** The 0-based `pdfPage` rendered at `widthPx` rounded up to a multiple of 64, at most the cache's `maxWidth`. */
   get(pdfPage: number, widthPx: number): Promise<ImageBitmap> {
     if (this.#dead) return Promise.reject(this.#dead);
     let width: number;
     try {
-      width = bucketed(widthPx);
+      width = bucketed(widthPx, this.#maxWidth);
     } catch (error) {
       return Promise.reject(error);
     }
