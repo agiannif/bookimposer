@@ -46,3 +46,23 @@ test('turned pieces fill the sheet in reading order: the first piece is on top a
   assert.deepEqual(byPosition(front), [[5, 18, 18, 90], [2, 18, 396, 90], [7, 306, 18, 90], [null, 306, 396, 90]])
   assert.deepEqual(byPosition(back), [[6, 18, 18, 270], [null, 18, 396, 270], [4, 306, 18, 270], [3, 306, 396, 270]])
 })
+
+test('turned 76-page landscape sheet 1 reads 8 1 / 6 3 on the front and 2 7 / 4 5 on the back', () => {
+  // 1-based numbers in reading order, each side read upright (turned against its rotation). A blank-leaf
+  // page shows the number of the front board's page in the same place, as the app labels it.
+  const layout = impose(workedExample({ pageSizes: Array.from({ length: 76 }, () => ({ width: 378, height: 288 })) }))
+  const read = (side: SheetSide) => side.placements
+    .map((p) => {
+      const pdfPage = p.pdfPage ?? layout.allocations[p.partIndex - 1]!.pdfPages[p.partPage]!
+      // Rotation 90: rows are the sheet's columns right to left, each read top to bottom; 270 the reverse.
+      const key = p.rotation === 90 ? [-p.panel.x, p.panel.y] : [p.panel.x, -p.panel.y]
+      return { label: pdfPage + 1, key }
+    })
+    .sort((a, b) => a.key[0]! - b.key[0]! || a.key[1]! - b.key[1]!)
+    .map((p) => p.label)
+  const { front, back } = layout.sheets[0]
+  assert.deepEqual(front.placements.map((p) => p.rotation), [90, 90, 90, 90])
+  assert.deepEqual(back.placements.map((p) => p.rotation), [270, 270, 270, 270])
+  assert.deepEqual(read(front), [8, 1, 6, 3])
+  assert.deepEqual(read(back), [2, 7, 4, 5])
+})

@@ -68,7 +68,7 @@ test('more signatures than the pages can fill is an error, and nothing is alloca
   assert.equal(r.body, null)
   assert.deepEqual(r.issues, [{
     code: 'too-many-signatures', severity: 'error',
-    message: 'Too many signatures: with 76 body pages, at most 5 signatures can hold content',
+    message: 'Too many signatures: with 76 body pages, at most 5 signatures can hold content.',
     data: { bodyPages: 76, maxSignatures: 5 },
   }])
 })
@@ -86,7 +86,7 @@ test('a count within the maximum that still leaves a signature blank is an error
   assert.deepEqual(r.allocations, [])
   assert.deepEqual(r.issues, [{
     code: 'too-many-signatures', severity: 'error',
-    message: 'Too many signatures: with 76 body pages, 12 signatures of 8 pages leave 2 entirely blank',
+    message: 'Too many signatures: with 76 body pages, 12 signatures of 8 pages leave 2 entirely blank.',
     data: { bodyPages: 76, maxSignatures: 19 },
   }])
 })

@@ -11,6 +11,12 @@ export function encodePng(bitmap: ImageBitmap): Promise<Blob> {
 }
 
 /**
+ * URLs kept beyond the ones on screen: when the sheet changes, requests from the previous sheet can
+ * still be finishing, and the margin keeps them from revoking the new sheet's URLs.
+ */
+export const KEEP_MARGIN = 16;
+
+/**
  * One blob URL per bitmap, keeping the `maxUrls` most recently used and revoking the rest.
  * A big sheet can show more pages than that, so the view raises the cap with `keepAtLeast`.
  */
@@ -45,11 +51,11 @@ export class BitmapUrls {
   }
 
   /**
-   * Keeps at least the `count` most recently used URLs alive. The view passes how many pages are on
-   * screen before asking for their URLs, so none of them is revoked while it shows.
+   * Keeps at least the `count` + KEEP_MARGIN most recently used URLs alive. The view passes how many
+   * pages are on screen before asking for their URLs, so none of them is revoked while it shows.
    */
   keepAtLeast(count: number): void {
-    this.#keep = count;
+    this.#keep = count + KEEP_MARGIN;
   }
 
   /** Revokes every URL, when the view that shows them goes away. */

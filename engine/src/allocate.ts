@@ -84,8 +84,8 @@ export function allocatePages(spec: BookSpec): AllocationResult {
   if (blanksAdded >= pagesPerSignature) {
     const maxSignatures = Math.max(1, Math.ceil(bodyPages / piece))
     const message = signatures > maxSignatures
-      ? `Too many signatures: with ${bodyPages} body pages, at most ${maxSignatures} signatures can hold content`
-      : `Too many signatures: with ${bodyPages} body pages, ${signatures} signatures of ${pagesPerSignature} pages leave ${Math.floor(blanksAdded / pagesPerSignature)} entirely blank`
+      ? `Too many signatures: with ${bodyPages} body pages, at most ${maxSignatures} signatures can hold content.`
+      : `Too many signatures: with ${bodyPages} body pages, ${signatures} signatures of ${pagesPerSignature} pages leave ${Math.floor(blanksAdded / pagesPerSignature)} entirely blank.`
     return failure({ code: 'too-many-signatures', severity: 'error', message, data: { bodyPages, maxSignatures } })
   }
 

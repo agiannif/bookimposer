@@ -38,7 +38,7 @@ make fetch-pdfium
 
 == Command line
 
-`scripts/impose-pdf` turns a book PDF into a print-ready sheets PDF. Page content is embedded as vector content, never rasterized or re-encoded.
+`scripts/impose-pdf` turns a book PDF into a print-ready sheets PDF. Page content is embedded as vector content, never rasterized or re-encoded. Fonts and images that many pages share are written once, so the sheets PDF stays about the size of the book.
 
 This imposes a 76-page book as a front board, 10 signatures and a back board on US Letter, with cut marks:
 
@@ -96,6 +96,7 @@ Other tasks:
 ----
 make e2e         # end-to-end impose-pdf test
 make release     # release export binary
+make export-size-probe OUT=dir  # export a 300-page book sharing one image; print sizes and time
 make typecheck   # engine
 make lint        # rustfmt and clippy
 make tauri-check # compile the Tauri app (on Linux, needs the webkit2gtk-4.1 dev libraries)

@@ -162,12 +162,14 @@ fn pages_without_a_group_get_none() {
 
 #[test]
 fn source_lopdf_cannot_read_leaves_the_pdf_as_is() {
-    let sheets = export_bytes(&book_pdf(pdfium()));
+    let mut sheets = Document::load_mem(&export_bytes(&book_pdf(pdfium()))).unwrap();
+    let before = sheets.objects.clone();
 
-    let carried = carry_page_groups(b"%PDF-1.7 and nothing else", &sheets, &worked_example());
+    let carried = carry_page_groups(b"%PDF-1.7 and nothing else", &mut sheets, &worked_example());
 
     assert!(
         matches!(carried, Ok(Carried::SourceUnreadable(_))),
         "{carried:?}"
     );
+    assert_eq!(sheets.objects, before);
 }

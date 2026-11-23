@@ -26,7 +26,12 @@ export interface Issue { code: IssueCode; severity: 'error' | 'warning'; message
  * signature and hidden. With both boards, body page n is PDF page n.
  */
 export interface PartAllocation { partIndex: number; type: 'body' | 'board'; pdfPages: (number | null)[] }
-/** Blank pages of the leaves the boards wrap, at the start and end of the body: 2 each with a board on that side, else 0. */
+/**
+ * Blank pages of the leaves the boards wrap, at the start and end of the body: 2 each with a board on that side,
+ * else 0. A book has one body and every other part is a board, so the leaf before the body is wrapped by the
+ * board right before it in part order (allocations[body partIndex - 1]) and the leaf after by the board right
+ * after it (partIndex + 1).
+ */
 export interface LeafPages { before: number; after: number }
 /**
  * `bodyPages`: the body's PDF pages plus its blank leaves; signatures are sized from it. `blanksAdded`: the

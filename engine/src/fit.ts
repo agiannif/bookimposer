@@ -2,7 +2,9 @@ import type { Rect } from './geometry.ts'
 import type { PrintSettings, Size } from './types.ts'
 
 // Each slot is the piece's bleed box on the sheet front, already rotated if rotated. Slots come in the
-// order pieces fill them: the reading order of the pieces' pages, top row first, each row left to right.
+// order pieces fill them: the grid's rows as the pieces' pages read, top row first, each row left to right.
+// Upright, that is the sheet's rows top to bottom. Turned (each piece's top facing the sheet's right edge),
+// it is the sheet's columns from right to left, each column top to bottom.
 export interface SlotFit { rotated: boolean; across: number; down: number; perSheet: number; slots: Rect[] }
 
 export function pieceSize(cols: number, rows: number, panel: Size, bleed: number): Size {

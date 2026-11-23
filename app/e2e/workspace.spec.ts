@@ -69,7 +69,7 @@ test("removing the front board updates the parts list and the allocation bar", a
   // 76 body pages in 12 signatures of 8 pages leave two signatures blank.
   await page.getByTestId("signatures").fill("12");
   await expect(page.getByTestId("issue-error")).toHaveAttribute("data-code", "too-many-signatures");
-  await expect(page.getByTestId("issue-error")).toHaveText("Too many signatures: with 76 body pages, 12 signatures of 8 pages leave 2 entirely blank");
+  await expect(page.getByTestId("issue-error")).toHaveText("Too many signatures: with 76 body pages, 12 signatures of 8 pages leave 2 entirely blank. Use Suggest next to Signatures to pick a count that fits.");
   await expect(page.getByTestId("export-pdf")).toBeDisabled();
   await page.getByTestId("signatures").fill("10");
   await expect(page.getByTestId("issue-error")).toHaveCount(0);
@@ -167,7 +167,7 @@ test("an absurd signature count shows an error and disables export, then recover
   await page.getByTestId("signatures").fill("9000000000");
   const issue = page.getByTestId("issue-error");
   await expect(issue).toHaveAttribute("data-code", "too-many-signatures");
-  await expect(issue).toHaveText("Too many signatures: with 76 body pages, at most 19 signatures can hold content");
+  await expect(issue).toHaveText("Too many signatures: with 76 body pages, at most 19 signatures can hold content. Use Suggest next to Signatures to pick a count that fits.");
   await expect(page.getByTestId("export-pdf")).toBeDisabled();
   // Nothing is allocated, so the allocation bar is hidden rather than shown empty.
   await expect(page.getByRole("group", { name: "PDF pages per part" })).toHaveCount(0);

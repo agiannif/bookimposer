@@ -78,7 +78,7 @@ export function panelLabel(layout: Layout, p: PagePlacement): string | null {
   const leaves = layout.body?.leafPages;
   const part = layout.allocations[p.partIndex];
   if (part?.type !== "body" || !leaves) return null;
-  // Allocations are in part order, so the boards that wrap the leaves sit right before and after the body.
+  // Allocations are in part order, and the board that wraps each leaf is the part next to the body (see LeafPages).
   const after = part.pdfPages.length - leaves.after;
   const board = p.partPage < leaves.before
     ? layout.allocations[p.partIndex - 1]?.pdfPages[p.partPage]

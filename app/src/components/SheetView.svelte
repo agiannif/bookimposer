@@ -80,6 +80,8 @@
   let areaWidth = $state(0);
   let areaHeight = $state(0);
   let captionHeight = $state(0);
+  // Sized from the front's view alone: every duplex flip leaves the back's view 0 or 180 degrees from the
+  // front's, which shows the same size. A quarter turn between them would need both sizes here.
   const sides = $derived(sidesLayout(viewSize(layout.sheet, views.front), { width: areaWidth, height: areaHeight }, GAP, captionHeight + CAPTION_GAP));
   /**
    * How a side with view `view` is drawn: the turned sheet's size, the stage that hugs it (so the caption
@@ -114,8 +116,10 @@
       const page = p.pdfPage!;
       cache
         .get(page, thumbnailWidth(p, boxes[page]!, scale, window.devicePixelRatio || 1))
-        .then((bitmap) => urls.url(bitmap))
-        .then((url) => {
+        .then(async (bitmap) => {
+          // A superseded run's bitmap would only push this run's URLs out of the cap.
+          if (!current) return;
+          const url = await urls.url(bitmap);
           if (current && hrefs.get(page) !== url) hrefs = new Map(hrefs).set(page, url);
         })
         .catch(thumbnailFailed);

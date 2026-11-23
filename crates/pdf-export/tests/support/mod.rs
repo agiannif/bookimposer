@@ -156,6 +156,129 @@ pub fn labelled_book(pdfium: &Pdfium, pages: u32) -> Vec<u8> {
     fixture_pdf(pdfium, &pages)
 }
 
+/// The side, in pixels, of [`shared_resource_book`]'s images.
+pub const SHARED_IMAGE_SIDE: u32 = 256;
+
+/// A book of `pages` 288x378 pages built with lopdf, whose pages share their
+/// resources the way a typeset book does: every page draws the same image
+/// object, the same form XObject (which draws that image again) and the same
+/// font dictionary, plus its own label. Page `p` (0-based) uses image
+/// `image_of(p)` instead: each distinct value gets its own image object with
+/// its own pixels. Images are [`SHARED_IMAGE_SIDE`] pixels square, RGB
+/// noise that Flate cannot shrink, so each copy weighs about 192 KiB.
+///
+/// The font is Helvetica, not embedded: the repo has no font file to embed.
+/// The image and the form stand in for shared embedded resources.
+pub fn shared_resource_book(pages: u32, image_of: impl Fn(u32) -> u32) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    shared_resource_document(pages, image_of)
+        .save_to(&mut bytes)
+        .unwrap();
+    bytes
+}
+
+/// [`shared_resource_book`] as lopdf builds it, before it is saved.
+pub fn shared_resource_document(pages: u32, image_of: impl Fn(u32) -> u32) -> Document {
+    use lopdf::{Object, Stream};
+    let mut doc = Document::with_version("1.7");
+    let pages_id = doc.new_object_id();
+    let font = doc.add_object(dictionary! {
+        "Type" => "Font",
+        "Subtype" => "Type1",
+        "BaseFont" => "Helvetica",
+    });
+    let mut images = std::collections::BTreeMap::new();
+    let mut image = |doc: &mut Document, seed: u32| {
+        *images.entry(seed).or_insert_with(|| {
+            let mut state = seed.wrapping_mul(2_654_435_761).wrapping_add(1);
+            let pixels: Vec<u8> = (0..SHARED_IMAGE_SIDE * SHARED_IMAGE_SIDE * 3)
+                .map(|_| {
+                    state = state.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+                    (state >> 16) as u8
+                })
+                .collect();
+            // Encoded, as PDFium stores images: PDFium compresses a raw stream it copies, but
+            // copies an encoded one byte for byte.
+            doc.add_object(Stream::new(
+                dictionary! {
+                    "Type" => "XObject",
+                    "Subtype" => "Image",
+                    "Width" => SHARED_IMAGE_SIDE,
+                    "Height" => SHARED_IMAGE_SIDE,
+                    "ColorSpace" => "DeviceRGB",
+                    "BitsPerComponent" => 8,
+                    "Filter" => "FlateDecode",
+                },
+                stored_zlib(&pixels),
+            ))
+        })
+    };
+    let shared = image(&mut doc, 0);
+    let form = doc.add_object(Stream::new(
+        dictionary! {
+            "Type" => "XObject",
+            "Subtype" => "Form",
+            "BBox" => vec![0.into(), 0.into(), 288.into(), 378.into()],
+            "Resources" => dictionary! { "XObject" => dictionary! { "Im0" => shared } },
+        },
+        b"q 0.2 0.4 0.6 rg 20 300 248 40 re f Q q 48 0 0 48 220 310 cm /Im0 Do Q".to_vec(),
+    ));
+    let kids: Vec<Object> = (0..pages)
+        .map(|page| {
+            let own = image(&mut doc, image_of(page));
+            let content = format!(
+                "q 200 0 0 200 44 80 cm /Im0 Do Q /Fm0 Do BT /F1 24 Tf 30 30 Td ({}) Tj ET",
+                page + 1
+            );
+            let content = doc.add_object(Stream::new(dictionary! {}, content.into_bytes()));
+            doc.add_object(dictionary! {
+                "Type" => "Page",
+                "Parent" => pages_id,
+                "MediaBox" => vec![0.into(), 0.into(), 288.into(), 378.into()],
+                "Contents" => content,
+                "Resources" => dictionary! {
+                    "XObject" => dictionary! { "Im0" => own, "Fm0" => form },
+                    "Font" => dictionary! { "F1" => font },
+                },
+            })
+            .into()
+        })
+        .collect();
+    doc.objects.insert(
+        pages_id,
+        Object::Dictionary(dictionary! {
+            "Type" => "Pages",
+            "Kids" => kids,
+            "Count" => pages,
+        }),
+    );
+    let catalog = doc.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages_id });
+    doc.trailer.set("Root", catalog);
+    doc
+}
+
+/// `data` as a zlib stream (what /FlateDecode reads) of uncompressed
+/// deflate blocks: noise does not compress, and lopdf keeps a stream raw when
+/// compressing would not shrink it.
+fn stored_zlib(data: &[u8]) -> Vec<u8> {
+    let mut out = vec![0x78, 0x01];
+    let blocks: Vec<&[u8]> = data.chunks(u16::MAX as usize).collect();
+    for (index, block) in blocks.iter().enumerate() {
+        out.push(u8::from(index == blocks.len() - 1));
+        let len = block.len() as u16;
+        out.extend(len.to_le_bytes());
+        out.extend((!len).to_le_bytes());
+        out.extend(*block);
+    }
+    let (mut a, mut b) = (1u32, 0u32);
+    for &byte in data {
+        a = (a + u32::from(byte)) % 65_521;
+        b = (b + a) % 65_521;
+    }
+    out.extend(((b << 16) | a).to_be_bytes());
+    out
+}
+
 /// `image` turned `rotation` degrees clockwise.
 pub fn turned(image: &RgbImage, rotation: u16) -> RgbImage {
     match rotation {

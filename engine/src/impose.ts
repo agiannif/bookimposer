@@ -146,7 +146,8 @@ function buildSheet(pieces: Piece[], fit: SlotFit, size: Size, panel: Size, spec
   }
 }
 
-// A warning for each sheet where a kind of line got no ticks at all.
+// A warning for each sheet where a kind of line got no ticks at all. Reads the front only: the back's guides and
+// marks are the front's mapped behind it, so they agree.
 function noRoomForMarks(sheets: Sheet[]): Issue[] {
   return sheets.flatMap((sheet, index): Issue[] => {
     const { guides, marks } = sheet.front

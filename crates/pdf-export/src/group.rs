@@ -11,18 +11,17 @@ use std::collections::HashMap;
 /// What [`carry_page_groups`] did.
 #[derive(Debug, PartialEq)]
 pub enum Carried {
-    /// No placed page has a /Group, so the PDF is left byte for byte as
-    /// PDFium wrote it.
+    /// No placed page has a /Group, so the output is left as it was.
     Unchanged,
-    /// The PDF with the groups added.
-    Rewritten(Vec<u8>),
+    /// The groups were added to the output.
+    Added,
     /// lopdf could not read the source (PDFium, which repairs more, could);
-    /// holds lopdf's error. The PDF is left as PDFium wrote it.
+    /// holds lopdf's error. The output is left as it was.
     SourceUnreadable(String),
 }
 
-/// `sheets` (PDFium's export of `layout` from the PDF in `source`) with
-/// every placed page's /Group set on that placement's page-content form.
+/// Sets every placed page's /Group on that placement's page-content form in
+/// `output`, PDFium's export of `layout` from the PDF in `source`.
 ///
 /// Forms are matched to placements by structure, not by content: output page
 /// 2i is sheet i's front and 2i+1 its back, and each draws one wrapper form
@@ -32,7 +31,7 @@ pub enum Carried {
 /// Matching by content instead would be ambiguous for identical pages.
 pub fn carry_page_groups(
     source: &[u8],
-    sheets: &[u8],
+    output: &mut Document,
     layout: &Layout,
 ) -> Result<Carried, ExportError> {
     let source = match Document::load_mem(source) {
@@ -54,14 +53,13 @@ pub fn carry_page_groups(
         return Ok(Carried::Unchanged);
     }
 
-    let mut output = Document::load_mem(sheets).map_err(rewrite_error)?;
     let output_pages = output.get_pages();
     let mut copied = HashMap::new();
     for (index, side) in sides().enumerate() {
         let page = *output_pages
             .get(&(index as u32 + 1))
             .ok_or_else(|| unexpected(format!("no output page {}", index + 1)))?;
-        let wrappers = drawn_forms(&output, page)?;
+        let wrappers = drawn_forms(output, page)?;
         let placed: Vec<usize> = side.placements.iter().filter_map(|p| p.pdf_page).collect();
         if wrappers.len() != placed.len() {
             return Err(unexpected(format!(
@@ -75,8 +73,8 @@ pub fn carry_page_groups(
             let Some(group) = group_of(pdf_page) else {
                 continue;
             };
-            let group = deep_copy(source, &mut output, group, &mut copied)?;
-            let form = only_form_in(&output, wrapper)?;
+            let group = deep_copy(source, output, group, &mut copied)?;
+            let form = only_form_in(output, wrapper)?;
             output
                 .get_object_mut(form)
                 .and_then(Object::as_stream_mut)
@@ -85,11 +83,7 @@ pub fn carry_page_groups(
                 .set("Group", group);
         }
     }
-    let mut bytes = Vec::new();
-    output
-        .save_to(&mut bytes)
-        .map_err(|error| unexpected(error.to_string()))?;
-    Ok(Carried::Rewritten(bytes))
+    Ok(Carried::Added)
 }
 
 /// The forms `page`'s content draws with `Do`, in drawing order.

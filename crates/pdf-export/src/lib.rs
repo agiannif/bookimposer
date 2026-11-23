@@ -1,6 +1,7 @@
 //! Embeds source PDF pages onto printed sheets as form XObjects, without
 //! rasterizing or re-encoding any page content.
 
+pub mod dedupe;
 pub mod embed;
 pub mod geometry;
 pub mod group;
@@ -32,6 +33,8 @@ pub enum ExportError {
     LayoutHasErrors(Vec<String>),
     /// The page transparency groups could not be added to the output.
     PageGroups(String),
+    /// lopdf could not read or write PDFium's output to finish it.
+    Rewrite(String),
     /// The Layout places 0-based page `pdf_page`, but the source PDF has only
     /// `page_count` pages.
     PageOutOfRange { pdf_page: usize, page_count: usize },
@@ -49,6 +52,9 @@ impl fmt::Display for ExportError {
             ExportError::CannotRead(what) => write!(f, "cannot read {what}"),
             ExportError::PageGroups(message) => {
                 write!(f, "could not carry page transparency groups: {message}")
+            }
+            ExportError::Rewrite(message) => {
+                write!(f, "could not finish the output PDF: {message}")
             }
             ExportError::LayoutHasErrors(messages) => write!(
                 f,

@@ -70,17 +70,31 @@ fn byte_identity() {
         );
     }
 
-    let source_images: Vec<&[u8]> = streams_of_subtype(&source_doc, b"Image")
-        .map(|stream| stream.content.as_slice())
+    // Identical images are written once, so the output holds each distinct
+    // source image (dictionary and stored bytes) exactly once, unchanged.
+    // Equal bytes with a different dictionary (/Decode, /ColorSpace) are a
+    // different image and must stay apart. References (such as /SMask) are
+    // compared by what they point to, since object numbers differ.
+    let image =
+        |doc: &Document, stream: &lopdf::Stream| inlined(doc, &Object::Stream(stream.clone()));
+    let mut distinct_source_images = Vec::new();
+    for source_image in streams_of_subtype(&source_doc, b"Image").map(|s| image(&source_doc, s)) {
+        if !distinct_source_images.contains(&source_image) {
+            distinct_source_images.push(source_image);
+        }
+    }
+    let output_images: Vec<_> = streams_of_subtype(&output_doc, b"Image")
+        .map(|s| image(&output_doc, s))
         .collect();
-    let output_images: Vec<&[u8]> = streams_of_subtype(&output_doc, b"Image")
-        .map(|stream| stream.content.as_slice())
-        .collect();
-    assert_eq!(output_images.len(), source_images.len(), "image count");
-    for image in &output_images {
+    assert_eq!(
+        output_images.len(),
+        distinct_source_images.len(),
+        "image count"
+    );
+    for source_image in &distinct_source_images {
         assert!(
-            source_images.contains(image),
-            "an output image stream differs from every source image"
+            output_images.contains(source_image),
+            "a source image is missing from the output or changed"
         );
     }
 }
@@ -536,4 +550,30 @@ fn streams_of_subtype<'a>(
         .filter(move |stream| {
             stream.dict.get(b"Subtype").and_then(Object::as_name).ok() == Some(subtype)
         })
+}
+
+/// `object` with every reference replaced by a copy of what it points to,
+/// recursively, and each stream's file position cleared, so objects from two
+/// documents compare by value. Image dictionaries have no reference cycles.
+fn inlined(doc: &Document, object: &Object) -> Object {
+    match object {
+        Object::Reference(id) => inlined(doc, doc.get_object(*id).unwrap()),
+        Object::Array(items) => Object::Array(items.iter().map(|i| inlined(doc, i)).collect()),
+        Object::Dictionary(dict) => Object::Dictionary(inlined_dict(doc, dict)),
+        Object::Stream(stream) => {
+            let mut stream = stream.clone();
+            stream.dict = inlined_dict(doc, &stream.dict);
+            stream.start_position = None;
+            Object::Stream(stream)
+        }
+        other => other.clone(),
+    }
+}
+
+fn inlined_dict(doc: &Document, dict: &lopdf::Dictionary) -> lopdf::Dictionary {
+    let mut copy = lopdf::Dictionary::new();
+    for (key, value) in dict.iter() {
+        copy.set(key.clone(), inlined(doc, value));
+    }
+    copy
 }

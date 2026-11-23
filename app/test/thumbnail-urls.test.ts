@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { resolveObjectURL } from "node:buffer";
-import { BitmapUrls } from "../src/lib/thumbnail-urls.ts";
+import { BitmapUrls, KEEP_MARGIN } from "../src/lib/thumbnail-urls.ts";
 
 const bitmap = (name: string) => ({ name }) as unknown as ImageBitmap;
 
@@ -69,14 +69,17 @@ test("clear revokes every URL and encodes again after", async () => {
   assert.deepEqual(encoded, ["A", "A"]);
 });
 
-test("keepAtLeast raises the cap so every URL on screen stays live", async () => {
+test("keepAtLeast raises the cap to the URLs on screen plus a margin, so every one stays live", async () => {
+  // The margin covers URLs that a superseded request is still finishing while the new ones arrive.
   const { urls } = setup(2);
   urls.keepAtLeast(3);
-  const all = [await urls.url(bitmap("A")), await urls.url(bitmap("B")), await urls.url(bitmap("C"))];
-  assert.deepEqual(all.map(live), [true, true, true]);
-  await urls.url(bitmap("D"));
+  const all: string[] = [];
+  for (let i = 0; i < 3 + KEEP_MARGIN; i++) all.push(await urls.url(bitmap(`P${i}`)));
+  assert.deepEqual(all.map(live), all.map(() => true));
+  await urls.url(bitmap("one more"));
   await Promise.resolve();
-  assert.equal(live(all[0]!), false, "the cap is 3 now, so A goes");
+  assert.equal(live(all[0]!), false, "the cap is 3 + KEEP_MARGIN, so the oldest goes");
+  assert.equal(live(all[1]!), true);
 });
 
 test("keepAtLeast never lowers the cap below maxUrls", async () => {
