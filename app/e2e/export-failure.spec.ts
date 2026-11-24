@@ -1,5 +1,5 @@
 // A failed export. Runs in the "export-failure" project, whose dev server (see playwright.config.ts)
-// has BOOKCOMPOSER_DEV_EXPORT_FAIL=1 so the export endpoint always answers 422.
+// has BOOKIMPOSER_DEV_EXPORT_FAIL=1 so the export endpoint always answers 422.
 import { test, expect } from "@playwright/test";
 import { FIRST_BUILD_MS, openWithBoards } from "./open-book.ts";
 

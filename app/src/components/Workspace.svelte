@@ -38,7 +38,7 @@
         pdf: { name: pdf.name, pageCount: pdf.pageSizes.length, sha256: await sha256Hex(pdf.bytes) },
         settings: $state.snapshot(ws.settings),
       });
-      await backend.saveProject(text, `${pdf.name.replace(/\.pdf$/i, "")}.bookcomposer.json`);
+      await backend.saveProject(text, `${pdf.name.replace(/\.pdf$/i, "")}.bookimposer.json`);
     } catch (e) {
       saveError = `Could not save the project: ${e instanceof Error ? e.message : String(e)}`;
     }
@@ -48,7 +48,7 @@
 <div class="workspace">
   <header class="top">
     <div class="title">
-      <h1>bookcomposer</h1>
+      <h1>bookimposer</h1>
       <span class="hint">{ws.pdf?.name} · {ws.pdf?.pageSizes.length} pages</span>
     </div>
     <div class="buttons">

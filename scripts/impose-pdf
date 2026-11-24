@@ -5,8 +5,8 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUSTUP_BIN="${RUSTUP_BIN:-/home/linuxbrew/.linuxbrew/opt/rustup/bin}"
 export PATH="$RUSTUP_BIN:$PATH"
-export BOOKCOMPOSER_PDFIUM_DIR="${BOOKCOMPOSER_PDFIUM_DIR:-$REPO_ROOT/vendor/pdfium/lib}"
-EXPORT_BIN="$REPO_ROOT/target/release/bookcomposer-export"
+export BOOKIMPOSER_PDFIUM_DIR="${BOOKIMPOSER_PDFIUM_DIR:-$REPO_ROOT/vendor/pdfium/lib}"
+EXPORT_BIN="$REPO_ROOT/target/release/bookimposer-export"
 ENGINE_BIN="$REPO_ROOT/engine/bin"
 
 usage() {
@@ -44,8 +44,8 @@ Options:
                       and keep it, e.g. to inspect the layout
   -h, --help          show this help
 
-Needs PDFium (run 'make fetch-pdfium'; looked up in \$BOOKCOMPOSER_PDFIUM_DIR,
-default vendor/pdfium/lib) and builds target/release/bookcomposer-export with
+Needs PDFium (run 'make fetch-pdfium'; looked up in \$BOOKIMPOSER_PDFIUM_DIR,
+default vendor/pdfium/lib) and builds target/release/bookimposer-export with
 cargo (found in \$RUSTUP_BIN) on every run, which is a no-op when it is up to date.
 USAGE
 }
@@ -80,7 +80,7 @@ done
 [[ -f "$input" ]] || fail "input not found: $input"
 # Check the book flags now, on no pages, so a typo fails before the build.
 echo '{"pageSizes": []}' | node "$ENGINE_BIN/book-spec.ts" ${spec_args[@]+"${spec_args[@]}"} > /dev/null
-[[ -d "$BOOKCOMPOSER_PDFIUM_DIR" ]] || fail "PDFium not found in $BOOKCOMPOSER_PDFIUM_DIR. Run 'make fetch-pdfium' first."
+[[ -d "$BOOKIMPOSER_PDFIUM_DIR" ]] || fail "PDFium not found in $BOOKIMPOSER_PDFIUM_DIR. Run 'make fetch-pdfium' first."
 
 # Always run cargo so the binary is never stale; it is a no-op when up to date.
 (cd "$REPO_ROOT" && cargo build --release -p pdf-export --quiet) >&2 || fail "cargo build failed"

@@ -6,7 +6,7 @@ use pdf_export::{
 use std::process::ExitCode;
 
 const USAGE: &str = "\
-Usage: bookcomposer-export <command>
+Usage: bookimposer-export <command>
 
 Commands:
   page-sizes <input.pdf>   Print each page's trim size as it displays (after
@@ -18,7 +18,7 @@ Commands:
                            draw the layout's cut and fold marks on both sides
                            of each sheet. Warnings go to stderr.
 
-PDFium is loaded from $BOOKCOMPOSER_PDFIUM_DIR.";
+PDFium is loaded from $BOOKIMPOSER_PDFIUM_DIR.";
 
 fn main() -> ExitCode {
     timing::stage("cli.total", run)

@@ -81,8 +81,8 @@ test("the closed book shows the cover; turning shows pages 2 and 3 from where th
 test("a page misplaced on a printed sheet shows up misplaced in the book", async ({ page }) => {
   // Swap where pages 3 and 8 (0-based 2 and 7) are printed, as a broken engine might.
   await page.addInitScript(() => {
-    (window as { __bookcomposerCorruptLayout?: (layout: { sheets: { front: { placements: { pdfPage: number | null }[] } }[] }) => void })
-      .__bookcomposerCorruptLayout = (layout) => {
+    (window as { __bookimposerCorruptLayout?: (layout: { sheets: { front: { placements: { pdfPage: number | null }[] } }[] }) => void })
+      .__bookimposerCorruptLayout = (layout) => {
         const placements = layout.sheets.flatMap((s) => s.front.placements);
         const a = placements.find((p) => p.pdfPage === 2)!;
         const b = placements.find((p) => p.pdfPage === 7)!;
@@ -99,8 +99,8 @@ test("a page misplaced on a printed sheet shows up misplaced in the book", async
 test("sheets that cannot be assembled by their steps say so", async ({ page }) => {
   // Fold the first piece's spine with the wrong half, as a broken engine might say to.
   await page.addInitScript(() => {
-    (window as { __bookcomposerCorruptLayout?: (layout: { assembly: { pieces: { folds: { moves: string }[] }[] } }) => void })
-      .__bookcomposerCorruptLayout = (layout) => {
+    (window as { __bookimposerCorruptLayout?: (layout: { assembly: { pieces: { folds: { moves: string }[] }[] } }) => void })
+      .__bookimposerCorruptLayout = (layout) => {
         layout.assembly.pieces[0]!.folds[0]!.moves = "right";
       };
   });
@@ -136,8 +136,8 @@ test("verify export names the pages whose exported face differs and turns the bo
   // Blacks out where the export prints page 14 (0-based 13), as a broken exporter might.
   const target = printed(13);
   await page.addInitScript((t) => {
-    (window as { __bookcomposerPerturbExport?: (ctx: CanvasRenderingContext2D, side: { sheet: number; side: string; scale: number }) => void })
-      .__bookcomposerPerturbExport = (ctx, side) => {
+    (window as { __bookimposerPerturbExport?: (ctx: CanvasRenderingContext2D, side: { sheet: number; side: string; scale: number }) => void })
+      .__bookimposerPerturbExport = (ctx, side) => {
         if (String(side.sheet) !== t.sheet || side.side !== t.side) return;
         const [x, y, w, h] = t.region.split(" ").map((n) => Number(n) * side.scale);
         ctx.fillStyle = "#000000";

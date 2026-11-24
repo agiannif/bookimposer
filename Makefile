@@ -5,7 +5,7 @@ SHELL := bash
 
 RUSTUP_BIN ?= /home/linuxbrew/.linuxbrew/opt/rustup/bin
 export PATH := $(RUSTUP_BIN):$(PATH)
-export BOOKCOMPOSER_PDFIUM_DIR ?= $(CURDIR)/vendor/pdfium/lib
+export BOOKIMPOSER_PDFIUM_DIR ?= $(CURDIR)/vendor/pdfium/lib
 export PLAYWRIGHT_BROWSERS_PATH := $(CURDIR)/app/.playwright-browsers
 PDFIUM_LIB := $(if $(filter Darwin,$(shell uname -s)),libpdfium.dylib,libpdfium.so)
 
@@ -85,20 +85,20 @@ app-e2e: ## Run the app browser tests (needs 'make app-browsers')
 	cd app && npm run e2e
 
 tauri-check: ## Compile the Tauri app
-	cargo check -p bookcomposer-app
+	cargo check -p bookimposer-app
 
 ipc-fixtures: ## Regenerate the golden Tauri IPC frames (after a deliberate wire format change)
 	cd app && node test/make-ipc-fixtures.ts
 
 tauri-test: require-pdfium ## Test the Tauri app's commands (needs PDFium)
-	cargo test -p bookcomposer-app
+	cargo test -p bookimposer-app
 
 typecheck: ## Typecheck the TypeScript engine
 	cd engine && npm run typecheck
 
 lint: ## Check Rust formatting and run clippy
 	cargo fmt --check
-	cargo clippy -p pdf-export -p bookcomposer-app --all-targets -- -D warnings
+	cargo clippy -p pdf-export -p bookimposer-app --all-targets -- -D warnings
 
 fmt: ## Format Rust code
 	cargo fmt
@@ -110,7 +110,7 @@ release: ## Build the release export binary
 	cargo build --release -p pdf-export
 
 require-pdfium:
-	@test -f "$(BOOKCOMPOSER_PDFIUM_DIR)/$(PDFIUM_LIB)" || { echo "PDFium not found in $(BOOKCOMPOSER_PDFIUM_DIR). Run 'make fetch-pdfium' first." >&2; exit 1; }
+	@test -f "$(BOOKIMPOSER_PDFIUM_DIR)/$(PDFIUM_LIB)" || { echo "PDFium not found in $(BOOKIMPOSER_PDFIUM_DIR). Run 'make fetch-pdfium' first." >&2; exit 1; }
 
 perf-probe: require-pdfium ## Time each import/export stage (app, dev server, Rust) into OUT=dir (default target/perf); PDF=file RUNS=3 PORT=5199; usage: node app/scripts/perf-probe.ts --help
 	cargo build --quiet --release -p pdf-export

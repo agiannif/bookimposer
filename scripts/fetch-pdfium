@@ -23,7 +23,7 @@ Usage: scripts/fetch-pdfium [--platform linux-x64|mac-univ] [--dest DIR]
 Downloads the prebuilt PDFium binary (bblanchon/pdfium-binaries, ${PDFIUM_RELEASE}),
 checks its SHA-256 against the value pinned in this script, and replaces DIR
 with its contents. The pdf-export crate loads the library from DIR/lib
-(or from \$BOOKCOMPOSER_PDFIUM_DIR when set). On any failure DIR is left as it was.
+(or from \$BOOKIMPOSER_PDFIUM_DIR when set). On any failure DIR is left as it was.
 
 Use it once after cloning, or whenever the pinned PDFium release changes.
 

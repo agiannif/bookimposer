@@ -72,7 +72,7 @@ test("the unit is remembered for next time and saved with the project", async ({
   await expect(page.getByTestId("unit")).toHaveValue("mm");
 
   // Saved: the project's unit wins over what was remembered.
-  await page.evaluate(() => localStorage.setItem("bookcomposer.unit", "in"));
+  await page.evaluate(() => localStorage.setItem("bookimposer.unit", "in"));
   await page.goto("/");
   const chooser = page.waitForEvent("filechooser");
   await page.getByTestId("open-project").click();

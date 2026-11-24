@@ -1,7 +1,7 @@
 {
-  "productName": "bookcomposer",
+  "productName": "bookimposer",
   "version": "0.1.0",
-  "identifier": "app.bookcomposer",
+  "identifier": "app.bookimposer",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://127.0.0.1:5173"
@@ -9,7 +9,7 @@
   "app": {
     "windows": [
       {
-        "title": "bookcomposer",
+        "title": "bookimposer",
         "width": 1280,
         "height": 800,
         "minWidth": 1100,

@@ -34,7 +34,7 @@ fn fake_curl(dir: &Path, archive: &Path) -> PathBuf {
 
 #[test]
 fn archive_with_the_wrong_checksum_is_refused_and_dest_is_untouched() {
-    let dir = std::env::temp_dir().join(format!("bookcomposer-fetch-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("bookimposer-fetch-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let content = dir.join("content/lib");
     std::fs::create_dir_all(&content).unwrap();

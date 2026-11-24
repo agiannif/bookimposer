@@ -7,7 +7,7 @@ export default defineConfig(({ command }) => ({
     svelte(),
     // The browser build has no native backend, so the dev server runs the export CLI for it.
     ...(command === "serve"
-      ? [{ name: "bookcomposer-dev-exporter", configureServer(server: { middlewares: { use(handler: ReturnType<typeof createExporterHandler>): unknown } }) {
+      ? [{ name: "bookimposer-dev-exporter", configureServer(server: { middlewares: { use(handler: ReturnType<typeof createExporterHandler>): unknown } }) {
           server.middlewares.use(createExporterHandler());
         },
       }]

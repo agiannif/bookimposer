@@ -30,7 +30,7 @@
   // Test hook (dev builds only): e2e specs corrupt the Layout the 3D book is built from, to show that a
   // misplaced page shows up here.
   type CorruptHook = (layout: Layout) => void;
-  const corrupt = import.meta.env.DEV ? (window as { __bookcomposerCorruptLayout?: CorruptHook }).__bookcomposerCorruptLayout : undefined;
+  const corrupt = import.meta.env.DEV ? (window as { __bookimposerCorruptLayout?: CorruptHook }).__bookimposerCorruptLayout : undefined;
   const layout = $derived.by(() => {
     if (!corrupt) return imposed;
     const copy = $state.snapshot(imposed) as Layout;
@@ -86,7 +86,7 @@
   let verifyError: string | null = $state(null);
 
   // Test hook (dev builds only): e2e specs draw over an exported side to show the check catches it.
-  const perturbExport = import.meta.env.DEV ? (window as { __bookcomposerPerturbExport?: PerturbExport }).__bookcomposerPerturbExport : undefined;
+  const perturbExport = import.meta.env.DEV ? (window as { __bookimposerPerturbExport?: PerturbExport }).__bookimposerPerturbExport : undefined;
 
   async function verifyTheExport() {
     const at = imposed;

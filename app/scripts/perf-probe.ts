@@ -1,8 +1,8 @@
 // Times every stage of importing a PDF and exporting it, as the app experiences them (dev path: Chromium ->
-// Vite dev middleware -> bookcomposer-export CLI) and without HTTP (library path: the CLI run directly).
+// Vite dev middleware -> bookimposer-export CLI) and without HTTP (library path: the CLI run directly).
 // Run it through `make perf-probe`; `--help` lists the options. Measuring only: nothing here changes the app.
 //
-// Stage sources: the Rust stages come from BOOKCOMPOSER_TIMINGS=1 (JSON lines on the CLI's stderr), the
+// Stage sources: the Rust stages come from BOOKIMPOSER_TIMINGS=1 (JSON lines on the CLI's stderr), the
 // middleware's from the same variable on the dev server, the app's from performance measures "bc:*" (set up by
 // perf.ts, enabled by the init script below) read through Playwright.
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
@@ -72,15 +72,15 @@ function addRustLines(stages: Stages, stderr: string, prefix: string): void {
 }
 
 const REPO = resolve(import.meta.dirname, "../..");
-const BIN = join(REPO, "target/release/bookcomposer-export");
-const env = { ...process.env, BOOKCOMPOSER_TIMINGS: "1", BOOKCOMPOSER_PDFIUM_DIR: process.env.BOOKCOMPOSER_PDFIUM_DIR ?? join(REPO, "vendor/pdfium/lib") };
+const BIN = join(REPO, "target/release/bookimposer-export");
+const env = { ...process.env, BOOKIMPOSER_TIMINGS: "1", BOOKIMPOSER_PDFIUM_DIR: process.env.BOOKIMPOSER_PDFIUM_DIR ?? join(REPO, "vendor/pdfium/lib") };
 
 /** Runs the CLI, returning its wall time and stderr; a failure stops the probe. */
 function runCli(args: string[]): { wall: number; stdout: string; stderr: string } {
   const start = performance.now();
   const r = spawnSync(BIN, args, { env, encoding: "utf8", maxBuffer: 1 << 30 });
   const wall = performance.now() - start;
-  if (r.status !== 0) fail(`bookcomposer-export ${args.join(" ")} failed: ${r.stderr}`);
+  if (r.status !== 0) fail(`bookimposer-export ${args.join(" ")} failed: ${r.stderr}`);
   return { wall, stdout: r.stdout, stderr: r.stderr };
 }
 
@@ -178,7 +178,7 @@ async function devRun(pdf: string, base: string, server: { lines: ServerLine[] }
   try {
     const page = await context.newPage();
     page.setDefaultTimeout(LONG);
-    await page.addInitScript(() => ((globalThis as { __bookcomposerPerf?: boolean }).__bookcomposerPerf = true));
+    await page.addInitScript(() => ((globalThis as { __bookimposerPerf?: boolean }).__bookimposerPerf = true));
     await page.goto(base);
     const wall = async (phase: string, action: () => Promise<void>) => {
       const start = performance.now();
@@ -266,7 +266,7 @@ async function main(): Promise<void> {
     if (r.status !== 0) fail("could not generate the probe PDF");
     pdfs = [probe, join(REPO, "app/e2e/fixtures/landscape-76.pdf"), join(REPO, "app/e2e/fixtures/book-76.pdf")];
   }
-  const work = mkdtempSync(join(tmpdir(), "bookcomposer-perf-"));
+  const work = mkdtempSync(join(tmpdir(), "bookimposer-perf-"));
   const library = new Map<string, Stages[]>();
   const dev = new Map<string, Stages[]>();
   let server: Awaited<ReturnType<typeof startServer>> | undefined;

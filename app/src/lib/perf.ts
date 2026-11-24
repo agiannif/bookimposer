@@ -1,8 +1,8 @@
 // Stage timing for `make perf-probe`: User Timing measures named "bc:<stage>", which the probe reads through
-// Playwright. Off unless the page sets `globalThis.__bookcomposerPerf = true` before the app loads, so normal
+// Playwright. Off unless the page sets `globalThis.__bookimposerPerf = true` before the app loads, so normal
 // runs record nothing.
 
-const enabled = () => (globalThis as { __bookcomposerPerf?: unknown }).__bookcomposerPerf === true;
+const enabled = () => (globalThis as { __bookimposerPerf?: unknown }).__bookimposerPerf === true;
 
 /** Records the time since `start` (a `performance.now()` reading) as the stage `name`. */
 export function record(name: string, start: number, detail?: Record<string, unknown>): void {

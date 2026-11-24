@@ -40,7 +40,7 @@ export function presetLabel(name: SheetName, unit: Unit): string {
   return `${PRESET_NAMES[name]} (${formatLength(width, unit)} × ${formatLength(height, unit)} ${unit})`;
 }
 
-const STORAGE_KEY = "bookcomposer.unit";
+const STORAGE_KEY = "bookimposer.unit";
 type UnitStorage = Pick<Storage, "getItem" | "setItem">;
 
 // Storage can be missing or throw (private windows, blocked site data); the unit then just isn't remembered.

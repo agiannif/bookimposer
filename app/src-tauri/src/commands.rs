@@ -3,7 +3,7 @@
 //! PDF bytes cross the IPC bridge raw, never as JSON number arrays:
 //!
 //! - `page_sizes`: the request body is the raw PDF. The answer is the same
-//!   JSON as `bookcomposer-export page-sizes`: `{ pageSizes, boxes }`.
+//!   JSON as `bookimposer-export page-sizes`: `{ pageSizes, boxes }`.
 //! - `export_pdf`: the request body is a frame of a 4-byte big-endian length
 //!   N, then N bytes of UTF-8 JSON `{ "layout": <Layout JSON as a string>,
 //!   "cutMarks": bool, "foldMarks": bool }`, then the raw source PDF to the
@@ -26,12 +26,12 @@ use std::sync::Mutex;
 use tauri::State;
 use tauri::ipc::{InvokeBody, Request, Response};
 
-/// Where PDFium is loaded from when `$BOOKCOMPOSER_PDFIUM_DIR` is unset: the
+/// Where PDFium is loaded from when `$BOOKIMPOSER_PDFIUM_DIR` is unset: the
 /// app's bundled `resources/pdfium/`.
 pub struct PdfiumFallbackDir(pub PathBuf);
 
 /// The process's one PDFium binding, loaded on first use from
-/// `$BOOKCOMPOSER_PDFIUM_DIR`, or from `fallback_dir` when that is unset. A
+/// `$BOOKIMPOSER_PDFIUM_DIR`, or from `fallback_dir` when that is unset. A
 /// failed load is not remembered, so the next call tries again.
 pub fn shared_pdfium(fallback_dir: &Path) -> Result<&'static Pdfium, String> {
     static PDFIUM: Mutex<Option<&'static Pdfium>> = Mutex::new(None);
@@ -164,7 +164,7 @@ mod tests {
         String::from_utf8(repo_file(&format!("crates/pdf-export/tests/data/{name}"))).unwrap()
     }
 
-    /// PDFium from `$BOOKCOMPOSER_PDFIUM_DIR`, which the Makefile sets.
+    /// PDFium from `$BOOKIMPOSER_PDFIUM_DIR`, which the Makefile sets.
     fn pdfium() -> &'static Pdfium {
         shared_pdfium(Path::new("/nonexistent"))
             .expect("could not load PDFium; run `make fetch-pdfium`")

@@ -63,7 +63,7 @@ test("the unit preference defaults to in and is remembered", () => {
 });
 
 test("an unknown stored unit falls back to in", () => {
-  assert.equal(loadUnit(memoryStorage({ "bookcomposer.unit": "cubits" })), "in");
+  assert.equal(loadUnit(memoryStorage({ "bookimposer.unit": "cubits" })), "in");
 });
 
 test("the unit preference works without usable storage", () => {

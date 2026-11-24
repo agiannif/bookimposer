@@ -1,4 +1,4 @@
-= bookcomposer
+= bookimposer
 
 A book and zine imposition tool. The engine is a pure TypeScript layout library (no UI, no PDF) that works out where each source page lands on each printed sheet.
 
@@ -69,7 +69,7 @@ Open http://127.0.0.1:5173. On a remote box, forward the port first: `ssh -L 517
 
 Choose a book PDF, then set signatures, folds, boards and sheet size (Letter, A4, Tabloid, A3 or custom). The workspace shows the parts and where each page lands, the sheets one at a time with cut and fold lines on both sides (the back's behind the front's), and any layout warnings or errors. A board's blank leaf shows the board's page numbers (1 and 2 at the front, the last two at the back); padding blanks are unnumbered. *Show marks as exported* swaps the lines for the cut and fold marks the export prints, on both sides. Everything updates as you change a setting. *Suggest* next to Signatures picks a count for the current folds and boards. The parts bar marks the blank leaf each board wraps as "+2 blank (cover leaf)" at that end of the body.
 
-*Save project* writes the settings to a `.bookcomposer.json` file. Open it from the start screen and choose the same PDF to continue. *Export PDF* saves `<name>-imposed.pdf` with the page content embedded as vector content, and lists anything the exporter could not carry over, such as annotations. It is disabled while the layout has errors.
+*Save project* writes the settings to a `.bookimposer.json` file. Open it from the start screen and choose the same PDF to continue. *Export PDF* saves `<name>-imposed.pdf` with the page content embedded as vector content, and lists anything the exporter could not carry over, such as annotations. It is disabled while the layout has errors.
 
 == Developing
 
@@ -102,4 +102,4 @@ make lint        # rustfmt and clippy
 make tauri-check # compile the Tauri app (on Linux, needs the webkit2gtk-4.1 dev libraries)
 ----
 
-The Makefile expects the Rust toolchain in `RUSTUP_BIN` (default `/home/linuxbrew/.linuxbrew/opt/rustup/bin`) and loads PDFium from `BOOKCOMPOSER_PDFIUM_DIR` (default `vendor/pdfium/lib`); override either on the command line, e.g. `make test RUSTUP_BIN=~/.cargo/bin`.
+The Makefile expects the Rust toolchain in `RUSTUP_BIN` (default `/home/linuxbrew/.linuxbrew/opt/rustup/bin`) and loads PDFium from `BOOKIMPOSER_PDFIUM_DIR` (default `vendor/pdfium/lib`); override either on the command line, e.g. `make test RUSTUP_BIN=~/.cargo/bin`.

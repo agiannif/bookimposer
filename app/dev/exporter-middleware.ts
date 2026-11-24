@@ -1,11 +1,11 @@
-// Dev-only endpoints that run the bookcomposer-export CLI for the browser app:
+// Dev-only endpoints that run the bookimposer-export CLI for the browser app:
 //   POST /__dev/page-sizes  body: PDF bytes -> the CLI's page-sizes JSON
 //   POST /__dev/export      multipart: pdf (file), layout (JSON text), cutMarks, foldMarks
 //                           -> PDF bytes, warnings as a JSON array in X-Export-Warnings
 // Every failure answers with { error }: 422 when the CLI rejects the work, 400 for a bad request,
 // 500 (logged) for anything unexpected, 403 for a request from another origin. Errors name files
 // without the server's temp dir. The Tauri app does not use this.
-// With BOOKCOMPOSER_TIMINGS=1 each stage prints one JSON line to stderr ({"stage":"mw:cli","ms":12.3,"request":4}), and
+// With BOOKIMPOSER_TIMINGS=1 each stage prints one JSON line to stderr ({"stage":"mw:cli","ms":12.3,"request":4}), and
 // the CLI's own stage lines (it prints them under the same variable) are passed on with the request's number.
 import { execFile } from "node:child_process";
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -23,9 +23,9 @@ export interface ExporterOptions {
   repoRoot?: string;
   /** Defaults to $RUSTUP_BIN, then the Makefile's default. */
   rustupBin?: string;
-  /** Defaults to $BOOKCOMPOSER_PDFIUM_DIR, then <repo>/vendor/pdfium/lib. */
+  /** Defaults to $BOOKIMPOSER_PDFIUM_DIR, then <repo>/vendor/pdfium/lib. */
   pdfiumDir?: string;
-  /** Defaults to whether BOOKCOMPOSER_DEV_EXPORT_FAIL is set. Test hook for the e2e suite. */
+  /** Defaults to whether BOOKIMPOSER_DEV_EXPORT_FAIL is set. Test hook for the e2e suite. */
   forceExportFailure?: boolean;
   /** Where per-request temp dirs go. Defaults to the OS temp dir. */
   tmpRoot?: string;
@@ -41,10 +41,10 @@ export function jsonHeader(value: unknown): string {
 /** Whether a stderr line is a stage line from the CLI's timing output, not a warning. */
 const isTimingLine = (line: string) => line.startsWith("{") && line.includes('"stage":');
 
-/** Times the stages of one request. Does nothing unless BOOKCOMPOSER_TIMINGS is set (and not 0). */
+/** Times the stages of one request. Does nothing unless BOOKIMPOSER_TIMINGS is set (and not 0). */
 class Timings {
   static get on(): boolean {
-    return Boolean(process.env.BOOKCOMPOSER_TIMINGS) && process.env.BOOKCOMPOSER_TIMINGS !== "0";
+    return Boolean(process.env.BOOKIMPOSER_TIMINGS) && process.env.BOOKIMPOSER_TIMINGS !== "0";
   }
   static count = 0;
   readonly request = ++Timings.count;
@@ -97,10 +97,10 @@ function textField(form: FormData, name: string): string {
 export function createExporterHandler(options: ExporterOptions = {}) {
   const repoRoot = options.repoRoot ?? REPO_ROOT;
   const rustupBin = options.rustupBin ?? process.env.RUSTUP_BIN ?? "/home/linuxbrew/.linuxbrew/opt/rustup/bin";
-  const pdfiumDir = options.pdfiumDir ?? process.env.BOOKCOMPOSER_PDFIUM_DIR ?? join(repoRoot, "vendor/pdfium/lib");
-  const forceExportFailure = options.forceExportFailure ?? Boolean(process.env.BOOKCOMPOSER_DEV_EXPORT_FAIL);
-  const exportBin = join(repoRoot, "target/release/bookcomposer-export");
-  const env = { ...process.env, PATH: `${rustupBin}:${process.env.PATH ?? ""}`, BOOKCOMPOSER_PDFIUM_DIR: pdfiumDir };
+  const pdfiumDir = options.pdfiumDir ?? process.env.BOOKIMPOSER_PDFIUM_DIR ?? join(repoRoot, "vendor/pdfium/lib");
+  const forceExportFailure = options.forceExportFailure ?? Boolean(process.env.BOOKIMPOSER_DEV_EXPORT_FAIL);
+  const exportBin = join(repoRoot, "target/release/bookimposer-export");
+  const env = { ...process.env, PATH: `${rustupBin}:${process.env.PATH ?? ""}`, BOOKIMPOSER_PDFIUM_DIR: pdfiumDir };
   const { timeoutMs, maxBufferBytes } = options.cliLimits ?? { timeoutMs: 120_000, maxBufferBytes: 64 * 1024 * 1024 };
 
   // One build per handler, started by the first request that needs it.
@@ -148,7 +148,7 @@ export function createExporterHandler(options: ExporterOptions = {}) {
   }
 
   async function exportPdf(req: IncomingMessage, res: ServerResponse, dir: string, t: Timings): Promise<void> {
-    if (forceExportFailure) throw new RequestError("forced failure (BOOKCOMPOSER_DEV_EXPORT_FAIL)");
+    if (forceExportFailure) throw new RequestError("forced failure (BOOKIMPOSER_DEV_EXPORT_FAIL)");
     const host = req.headers.host ?? "localhost";
     const headers = new Headers();
     for (const [k, v] of Object.entries(req.headers)) if (typeof v === "string") headers.set(k, v);
@@ -196,11 +196,11 @@ export function createExporterHandler(options: ExporterOptions = {}) {
     const t = new Timings();
     const began = performance.now();
     try {
-      dir = await mkdtemp(join(options.tmpRoot ?? tmpdir(), "bookcomposer-"));
+      dir = await mkdtemp(join(options.tmpRoot ?? tmpdir(), "bookimposer-"));
       await action(req, res, dir, t);
     } catch (e) {
       const status = e instanceof RequestError ? e.status : 500;
-      if (status === 500) console.error(`[bookcomposer-dev-exporter] ${path} failed:`, e);
+      if (status === 500) console.error(`[bookimposer-dev-exporter] ${path} failed:`, e);
       if (res.headersSent) res.destroy();
       else sendJson(res, status, { error: (e as Error).message });
     } finally {

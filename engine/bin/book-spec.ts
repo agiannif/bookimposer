@@ -1,4 +1,4 @@
-// Reads `bookcomposer-export page-sizes` JSON on stdin and prints a BookSpec as JSON.
+// Reads `bookimposer-export page-sizes` JSON on stdin and prints a BookSpec as JSON.
 // Usage: node engine/bin/book-spec.ts --signatures N [--folds 1|2|3] [--front-board] [--back-board]
 //   [--sheet letter|a4|tabloid|a3|WxH] [--margin PT] [--gap PT] [--bleed PT] [--duplex long-edge|short-edge]
 // A bad flag or bad input exits 1 with a message on stderr.

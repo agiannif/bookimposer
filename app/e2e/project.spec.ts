@@ -1,7 +1,7 @@
 // Saving a project and opening it again.
 //
 // data-testids used here:
-//   save-project     the workspace's save button (downloads <pdf-name>.bookcomposer.json)
+//   save-project     the workspace's save button (downloads <pdf-name>.bookimposer.json)
 //   open-project     the start screen's button for opening a project file
 //   choose-pdf       the PDF input shown after a project is opened
 //   project-error    the start screen's message for an unreadable project
@@ -22,7 +22,7 @@ async function saveProject(page: Page): Promise<string> {
   const download = page.waitForEvent("download");
   await page.getByTestId("save-project").click();
   const d = await download;
-  expect(d.suggestedFilename()).toBe("book-76.bookcomposer.json");
+  expect(d.suggestedFilename()).toBe("book-76.bookimposer.json");
   return (await d.path())!;
 }
 

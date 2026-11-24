@@ -1,4 +1,4 @@
-//! The bookcomposer desktop app: the Svelte UI in a Tauri window, with PDF
+//! The bookimposer desktop app: the Svelte UI in a Tauri window, with PDF
 //! inspection and export done natively by the pdf-export crate.
 
 mod commands;
@@ -19,5 +19,5 @@ fn main() {
             commands::export_pdf
         ])
         .run(tauri::generate_context!())
-        .expect("bookcomposer could not start");
+        .expect("bookimposer could not start");
 }

@@ -1,4 +1,4 @@
-//! Stage timing for performance measurement. Off unless `BOOKCOMPOSER_TIMINGS`
+//! Stage timing for performance measurement. Off unless `BOOKIMPOSER_TIMINGS`
 //! is set to something other than empty or `0`; then each timed stage prints
 //! one JSON line to stderr, `{"stage":"export.embed","ms":12.3}`, with any
 //! extra numeric fields of the stage. When off, a stage just runs its closure.
@@ -12,7 +12,7 @@ use std::time::Instant;
 pub fn enabled() -> bool {
     static ON: OnceLock<bool> = OnceLock::new();
     *ON.get_or_init(|| {
-        std::env::var("BOOKCOMPOSER_TIMINGS").is_ok_and(|v| !v.is_empty() && v != "0")
+        std::env::var("BOOKIMPOSER_TIMINGS").is_ok_and(|v| !v.is_empty() && v != "0")
     })
 }
 

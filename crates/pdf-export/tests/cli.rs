@@ -1,4 +1,4 @@
-//! The `bookcomposer-export` binary's command line.
+//! The `bookimposer-export` binary's command line.
 
 mod support;
 
@@ -14,7 +14,7 @@ use support::{
 };
 
 fn run(args: &[&Path]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_bookcomposer-export"))
+    Command::new(env!("CARGO_BIN_EXE_bookimposer-export"))
         .args(args)
         .output()
         .unwrap()
@@ -41,7 +41,7 @@ fn page_sizes_prints_trim_sizes_and_boxes_as_json() {
             page(plain, None),
         ],
     );
-    let dir = std::env::temp_dir().join(format!("bookcomposer-cli-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("bookimposer-cli-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let input = dir.join("source.pdf");
     std::fs::write(&input, source).unwrap();
@@ -78,7 +78,7 @@ fn page_sizes_reports_rotated_pages_as_they_display() {
         }],
     );
     let source = with_rotation(pdfium, &landscape, 0, PdfPageRenderRotation::Degrees90);
-    let dir = std::env::temp_dir().join(format!("bookcomposer-cli-rot-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("bookimposer-cli-rot-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let input = dir.join("source.pdf");
     std::fs::write(&input, source).unwrap();
@@ -101,7 +101,7 @@ fn page_sizes_reports_rotated_pages_as_they_display() {
 
 #[test]
 fn input_that_is_not_a_pdf_exits_2() {
-    let dir = std::env::temp_dir().join(format!("bookcomposer-cli-text-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("bookimposer-cli-text-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let input = dir.join("notes.txt");
     std::fs::write(&input, "hello").unwrap();
@@ -115,7 +115,7 @@ fn input_that_is_not_a_pdf_exits_2() {
 
 #[test]
 fn password_protected_input_names_the_file_and_exits_2() {
-    let dir = std::env::temp_dir().join(format!("bookcomposer-cli-enc-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("bookimposer-cli-enc-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let input = dir.join("locked.pdf");
     std::fs::write(&input, include_bytes!("data/encrypted.pdf")).unwrap();
@@ -147,7 +147,7 @@ fn password_protected_input_names_the_file_and_exits_2() {
 
 #[test]
 fn damaged_input_names_the_file_and_exits_2() {
-    let dir = std::env::temp_dir().join(format!("bookcomposer-cli-cut-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("bookimposer-cli-cut-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let input = dir.join("cut.pdf");
     let whole = book_pdf(pdfium());
@@ -209,7 +209,7 @@ fn worked_example() -> Value {
 
 /// Like [`run_export`] for `layout`, with `flags` added to the command line.
 fn run_export_of(name: &str, layout: &Value, flags: &[&str]) -> (Output, Option<Vec<u8>>) {
-    let dir = std::env::temp_dir().join(format!("bookcomposer-cli-{name}-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("bookimposer-cli-{name}-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let (layout_path, input, sheets) = (
         dir.join("layout.json"),
@@ -359,7 +359,7 @@ fn repo() -> PathBuf {
 
 /// A fresh, empty temp dir for one test.
 fn temp_dir(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("bookcomposer-cli-{name}-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("bookimposer-cli-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     dir

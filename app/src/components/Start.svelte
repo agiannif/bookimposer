@@ -20,7 +20,7 @@
 </script>
 
 <main class="start">
-  <h1>bookcomposer</h1>
+  <h1>bookimposer</h1>
   <p class="hint">Turn a PDF into printable sheets for a zine or book.</p>
   {#if project}
     <div class="actions">

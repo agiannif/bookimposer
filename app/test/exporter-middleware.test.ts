@@ -68,11 +68,11 @@ test("a missing PDFium dir gives 422 pointing at make fetch-pdfium", async () =>
   assert.match(error, /make fetch-pdfium/);
 });
 
-test("BOOKCOMPOSER_DEV_EXPORT_FAIL forces an export failure", async () => {
+test("BOOKIMPOSER_DEV_EXPORT_FAIL forces an export failure", async () => {
   const url = await serve({ forceExportFailure: true });
   const res = await fetch(`${url}/__dev/export`, { method: "POST", body: exportForm(JSON.stringify(layout)) });
   assert.equal(res.status, 422);
-  assert.deepEqual(await res.json(), { error: "forced failure (BOOKCOMPOSER_DEV_EXPORT_FAIL)" });
+  assert.deepEqual(await res.json(), { error: "forced failure (BOOKIMPOSER_DEV_EXPORT_FAIL)" });
 });
 
 test("other URLs fall through to next", async () => {
@@ -118,16 +118,16 @@ test("an unexpected failure gives 500 and is logged once", async (t) => {
 
 test("a failed build is retried by the next request", async (t) => {
   t.mock.method(console, "error", () => {});
-  const root = await mkdtemp(join(tmpdir(), "bookcomposer-test-"));
+  const root = await mkdtemp(join(tmpdir(), "bookimposer-test-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   // A stand-in cargo that fails on its first run, then "builds" by copying the real binary.
-  const realBin = new URL("../../target/release/bookcomposer-export", import.meta.url).pathname;
+  const realBin = new URL("../../target/release/bookimposer-export", import.meta.url).pathname;
   await mkdir(join(root, "bin"));
   await writeFile(join(root, "bin/cargo"), [
     "#!/bin/sh",
     `echo run >> "${root}/attempts"`,
     `[ "$(wc -l < "${root}/attempts")" -ge 2 ] || { echo 'compile error' >&2; exit 1; }`,
-    `mkdir -p target/release && cp "${realBin}" target/release/bookcomposer-export`,
+    `mkdir -p target/release && cp "${realBin}" target/release/bookimposer-export`,
   ].join("\n"));
   await chmod(join(root, "bin/cargo"), 0o755);
   await mkdir(join(root, "repo"));
@@ -141,7 +141,7 @@ test("a failed build is retried by the next request", async (t) => {
 
 test("a temp dir that cannot be created gives 500 and the server stays up", async (t) => {
   t.mock.method(console, "error", () => {});
-  const file = join(await mkdtemp(join(tmpdir(), "bookcomposer-test-")), "not-a-dir");
+  const file = join(await mkdtemp(join(tmpdir(), "bookimposer-test-")), "not-a-dir");
   t.after(() => rm(dirname(file), { recursive: true, force: true }));
   await writeFile(file, "");
   const url = await serve({ tmpRoot: file });
@@ -174,14 +174,14 @@ test("a request from the server's own origin is served", async () => {
 
 /** A repo whose cargo does nothing and whose export binary is `script`, to drive the CLI limits. */
 async function fakeExporter(t: { after(fn: () => unknown): void }, script: string[]): Promise<{ repoRoot: string; rustupBin: string; pdfiumDir: string }> {
-  const root = await mkdtemp(join(tmpdir(), "bookcomposer-test-"));
+  const root = await mkdtemp(join(tmpdir(), "bookimposer-test-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   await mkdir(join(root, "bin"));
   await writeFile(join(root, "bin/cargo"), "#!/bin/sh\n");
   await chmod(join(root, "bin/cargo"), 0o755);
   await mkdir(join(root, "repo/target/release"), { recursive: true });
-  await writeFile(join(root, "repo/target/release/bookcomposer-export"), ["#!/bin/sh", ...script].join("\n"));
-  await chmod(join(root, "repo/target/release/bookcomposer-export"), 0o755);
+  await writeFile(join(root, "repo/target/release/bookimposer-export"), ["#!/bin/sh", ...script].join("\n"));
+  await chmod(join(root, "repo/target/release/bookimposer-export"), 0o755);
   return { repoRoot: join(root, "repo"), rustupBin: join(root, "bin"), pdfiumDir: new URL("../../vendor/pdfium/lib", import.meta.url).pathname };
 }
 
@@ -199,11 +199,11 @@ test("a CLI run with more output than the buffer allows is stopped with a 422", 
   assert.equal(await errorOf(res, 422), "The exporter wrote more than 1024 bytes of output and was stopped");
 });
 
-test("with BOOKCOMPOSER_TIMINGS the stage lines go to stderr and are not export warnings", async (t) => {
+test("with BOOKIMPOSER_TIMINGS the stage lines go to stderr and are not export warnings", async (t) => {
   const lines: string[] = [];
   t.mock.method(console, "error", (line: string) => lines.push(line));
-  process.env.BOOKCOMPOSER_TIMINGS = "1";
-  t.after(() => delete process.env.BOOKCOMPOSER_TIMINGS);
+  process.env.BOOKIMPOSER_TIMINGS = "1";
+  t.after(() => delete process.env.BOOKIMPOSER_TIMINGS);
   // The CLI inherits the variable from the server's environment at the time the handler is made.
   const timed = await serve();
   const res = await fetch(`${timed}/__dev/export`, { method: "POST", body: exportForm(JSON.stringify(layout)) });

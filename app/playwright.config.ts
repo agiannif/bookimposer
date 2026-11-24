@@ -1,7 +1,7 @@
 import { defineConfig } from "@playwright/test";
 
 // The export-failure project runs against a second dev server whose export endpoint always fails
-// (BOOKCOMPOSER_DEV_EXPORT_FAIL=1, read only by dev/exporter-middleware.ts). `make app-dev` never sets it.
+// (BOOKIMPOSER_DEV_EXPORT_FAIL=1, read only by dev/exporter-middleware.ts). `make app-dev` never sets it.
 export default defineConfig({
   testDir: "e2e",
   // WebGL (the 3D book) on SwiftShader: Chromium's default headless GL logs "GPU stall due to ReadPixels"
@@ -17,7 +17,7 @@ export default defineConfig({
       command: "npx vite --host 127.0.0.1 --port 5174 --strictPort",
       url: "http://127.0.0.1:5174",
       reuseExistingServer: false,
-      env: { BOOKCOMPOSER_DEV_EXPORT_FAIL: "1" },
+      env: { BOOKIMPOSER_DEV_EXPORT_FAIL: "1" },
     },
   ],
 });
