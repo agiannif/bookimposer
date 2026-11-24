@@ -58,6 +58,18 @@ A page's trim size is its TrimBox, or its CropBox when it has none, or its Media
 
 Not carried over (yet): annotations and form fields. A warning names each page that has any.
 
+== Install on macOS
+
+The _Mac release_ GitHub Actions workflow builds one `.dmg` for Apple silicon and Intel Macs. Download it from a release on the Releases page, or from the `bookimposer-macos-universal` artifact of a workflow run (a zip holding the `.dmg`). Open the `.dmg` and drag bookimposer to Applications.
+
+The app isn't signed with an Apple Developer ID, so macOS blocks its first launch. On macOS 15 and later:
+
+. Open bookimposer from Applications. When macOS says it can't verify the app, choose *Done*.
+. Open System Settings → Privacy & Security, scroll to Security and choose *Open Anyway* next to the bookimposer message.
+. Choose *Open Anyway* again and enter your password. Later launches open normally.
+
+On macOS 14 and earlier, Control-click the app in Applications and choose *Open* instead.
+
 == Running the app
 
 [source,sh]
@@ -100,6 +112,7 @@ make export-size-probe OUT=dir  # export a 300-page book sharing one image; prin
 make typecheck   # engine
 make lint        # rustfmt and clippy
 make tauri-check # compile the Tauri app (on Linux, needs the webkit2gtk-4.1 dev libraries)
+make mac-dmg     # universal macOS .dmg with PDFium bundled (on a Mac; CI runs it)
 ----
 
 The Makefile expects the Rust toolchain in `RUSTUP_BIN` (default `/home/linuxbrew/.linuxbrew/opt/rustup/bin`) and loads PDFium from `BOOKIMPOSER_PDFIUM_DIR` (default `vendor/pdfium/lib`); override either on the command line, e.g. `make test RUSTUP_BIN=~/.cargo/bin`.
