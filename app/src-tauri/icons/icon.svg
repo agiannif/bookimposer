@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Placeholder app icon: a folded signature, two sheets nested at the spine, seen from above.
+       Regenerate the platform sizes with: cd app && npx tauri icon src-tauri/icons/icon.svg -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="#ECE9E3"/>
+  <polygon points="282,372 512,436 512,756 282,692" fill="#C9C4BA"/>
+  <polygon points="512,436 742,372 742,692 512,756" fill="#B3AEA4"/>
+  <polygon points="302,300 512,358 512,680 302,622" fill="#6F6C66"/>
+  <polygon points="512,358 722,300 722,622 512,680" fill="#4F4C48"/>
+</svg>
