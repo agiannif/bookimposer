@@ -15,7 +15,10 @@
         "minWidth": 1100,
         "minHeight": 700
       }
-    ]
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; img-src 'self' blob:; style-src 'self' 'unsafe-inline'; connect-src 'self' ipc: http://ipc.localhost"
+    }
   },
   "bundle": {
     "resources": ["resources/pdfium/*"],
