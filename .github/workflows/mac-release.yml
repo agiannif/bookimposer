@@ -1,0 +1,71 @@
+# Builds the unsigned universal (arm64 + x86_64) macOS .dmg with PDFium bundled.
+# Every run uploads the .dmg as a workflow artifact; a v* tag also attaches it to a GitHub Release.
+# All build steps go through the Makefile, so `make test` and `make mac-dmg` reproduce this on a Mac.
+name: Mac release
+
+on:
+  push:
+    branches:
+      - main
+      - wip/mac-release
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+concurrency:
+  group: mac-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dmg:
+    runs-on: macos-15
+    permissions:
+      contents: write # creating the Release on v* tags
+    env:
+      DMG_GLOB: target/universal-apple-darwin/release/bundle/dmg/*.dmg
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Rust with both Apple targets
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            engine/package-lock.json
+            app/package-lock.json
+
+      - name: Install npm packages
+        run: |
+          (cd engine && npm ci)
+          (cd app && npm ci)
+
+      - name: Fetch PDFium (mac-univ, SHA-256 pinned in scripts/fetch-pdfium)
+        run: make fetch-pdfium
+
+      - name: Test (engine, pdf-export, app, Tauri commands) against the mac PDFium
+        run: make test
+
+      - name: Build the .dmg and check the bundled PDFium
+        run: make mac-dmg
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bookimposer-macos-universal
+          path: ${{ env.DMG_GLOB }}
+          if-no-files-found: error
+
+      - name: Attach the .dmg to the GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" $DMG_GLOB --title "$GITHUB_REF_NAME" --generate-notes \
+            || gh release upload "$GITHUB_REF_NAME" $DMG_GLOB --clobber

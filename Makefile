@@ -10,7 +10,7 @@ export PLAYWRIGHT_BROWSERS_PATH := $(CURDIR)/app/.playwright-browsers
 PDFIUM_LIB := $(if $(filter Darwin,$(shell uname -s)),libpdfium.dylib,libpdfium.so)
 
 .DEFAULT_GOAL := help
-.PHONY: help layout-fixtures fetch-pdfium test test-engine test-export e2e typecheck lint fmt build release require-pdfium app-dev app-test app-check app-e2e app-browsers app-fixtures app-screenshots app-book-screenshots export-size-probe perf-probe tauri-check tauri-test ipc-fixtures
+.PHONY: help layout-fixtures fetch-pdfium test test-engine test-export e2e typecheck lint fmt build release require-pdfium app-dev app-test app-check app-e2e app-browsers app-fixtures app-screenshots app-book-screenshots export-size-probe perf-probe tauri-check tauri-test ipc-fixtures app-build mac-dmg
 
 help: ## List targets
 	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  %-16s %s\n", $$1, $$2}'
@@ -83,6 +83,17 @@ app-browsers: ## Download Playwright's Chromium into app/.playwright-browsers
 
 app-e2e: ## Run the app browser tests (needs 'make app-browsers')
 	cd app && npm run e2e
+
+app-build: ## Build the app's web frontend into app/dist
+	cd app && npm run build
+
+MAC_BUNDLE := target/universal-apple-darwin/release/bundle
+
+mac-dmg: require-pdfium app-build ## Build the universal macOS .dmg with PDFium bundled (macOS only; needs both Apple Rust targets)
+	cp $(BOOKIMPOSER_PDFIUM_DIR)/libpdfium.dylib app/src-tauri/resources/pdfium/
+	cd app && npx tauri build --target universal-apple-darwin --bundles dmg
+	scripts/check-mac-bundle $(MAC_BUNDLE)/macos/bookimposer.app
+	ls $(MAC_BUNDLE)/dmg/*.dmg
 
 tauri-check: ## Compile the Tauri app
 	cargo check -p bookimposer-app

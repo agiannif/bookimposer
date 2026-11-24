@@ -30,6 +30,12 @@ use tauri::ipc::{InvokeBody, Request, Response};
 /// app's bundled `resources/pdfium/`.
 pub struct PdfiumFallbackDir(pub PathBuf);
 
+/// The bundled PDFium's folder inside the app's resource directory, where
+/// `tauri.conf.json` bundles `resources/pdfium/*`.
+pub fn bundled_pdfium_dir(resource_dir: &Path) -> PathBuf {
+    resource_dir.join("resources/pdfium")
+}
+
 /// The process's one PDFium binding, loaded on first use from
 /// `$BOOKIMPOSER_PDFIUM_DIR`, or from `fallback_dir` when that is unset. A
 /// failed load is not remembered, so the next call tries again.
@@ -180,6 +186,27 @@ mod tests {
         body.extend_from_slice(header.as_bytes());
         body.extend_from_slice(pdf);
         body
+    }
+
+    #[test]
+    fn the_bundle_puts_the_pdfium_resources_where_the_app_looks_for_them() {
+        // Tauri copies each bundle resource to its own path relative to src-tauri, under the
+        // resource directory (Contents/Resources in a macOS .app). The README stands in for
+        // the library, which only release builds put next to it.
+        let config: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        let patterns: Vec<String> =
+            serde_json::from_value(config["bundle"]["resources"].clone()).unwrap();
+        let readme = tauri::utils::resources::ResourcePaths::new(&patterns, true)
+            .iter()
+            .map(Result::unwrap)
+            .find(|resource| resource.path().ends_with("resources/pdfium/README.md"))
+            .expect("tauri.conf.json does not bundle resources/pdfium/");
+        let resource_dir = Path::new("/Applications/bookimposer.app/Contents/Resources");
+        assert_eq!(
+            resource_dir.join(readme.target()),
+            bundled_pdfium_dir(resource_dir).join("README.md")
+        );
     }
 
     #[test]

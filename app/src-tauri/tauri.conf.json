@@ -18,6 +18,10 @@
     ]
   },
   "bundle": {
-    "resources": ["resources/pdfium/*"]
+    "resources": ["resources/pdfium/*"],
+    "macOS": {
+      "signingIdentity": "-",
+      "hardenedRuntime": false
+    }
   }
 }

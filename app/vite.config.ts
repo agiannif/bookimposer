@@ -17,5 +17,7 @@ export default defineConfig(({ command }) => ({
   // those too, and nothing else outside the app.
   // Pre-bundled at startup: dependencies the optimizer would only find once the page loads them make it reload the page.
   optimizeDeps: { include: ["three", "@threlte/core", "@threlte/extras", "@embedpdf/pdfium"] },
+  // The desktop app loads its bundle from disk, so large chunks cost nothing; three.js and PDFium are most of it.
+  build: { chunkSizeWarningLimit: 2000 },
   server: { host: "127.0.0.1", port: 5173, strictPort: true, fs: { allow: [".", "../engine/src", "../assembler"] } },
 }));

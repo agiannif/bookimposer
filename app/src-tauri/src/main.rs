@@ -10,7 +10,7 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .setup(|app| {
-            let bundled = app.path().resource_dir()?.join("resources/pdfium");
+            let bundled = commands::bundled_pdfium_dir(&app.path().resource_dir()?);
             app.manage(commands::PdfiumFallbackDir(bundled));
             Ok(())
         })

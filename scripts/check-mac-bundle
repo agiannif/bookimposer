@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Check a built bookimposer.app before it ships: the bundled PDFium sits where the
+# app looks for it (Contents/Resources/resources/pdfium, see bundled_pdfium_dir in
+# app/src-tauri/src/commands.rs), and the app binary and the library are both
+# universal (arm64 and x86_64). `make mac-dmg` runs it after building; CI runs that.
+set -euo pipefail
+
+usage() {
+  cat <<USAGE
+Usage: scripts/check-mac-bundle APP
+
+APP is the built .app, e.g. target/universal-apple-darwin/release/bundle/macos/bookimposer.app.
+Exits non-zero, naming the problem, when the bundled PDFium is missing or a binary
+lacks an architecture. Needs macOS (lipo, plutil).
+USAGE
+}
+
+fail() {
+  echo "check-mac-bundle: $*" >&2
+  exit 1
+}
+
+case "${1:-}" in -h|--help) usage; exit 0 ;; esac
+[[ $# -eq 1 ]] || { usage >&2; exit 2; }
+app="$1"
+[[ -d "$app" ]] || fail "no app bundle at ${app}"
+command -v lipo >/dev/null || fail "lipo not found (run this on macOS)"
+command -v plutil >/dev/null || fail "plutil not found (run this on macOS)"
+
+executable="$(plutil -extract CFBundleExecutable raw "${app}/Contents/Info.plist")" \
+  || fail "cannot read CFBundleExecutable from ${app}/Contents/Info.plist"
+binary="${app}/Contents/MacOS/${executable}"
+library="${app}/Contents/Resources/resources/pdfium/libpdfium.dylib"
+[[ -f "$binary" ]] || fail "app binary missing: ${binary}"
+[[ -f "$library" ]] || fail "bundled PDFium missing: ${library}"
+
+for file in "$binary" "$library"; do
+  archs="$(lipo -archs "$file")"
+  for arch in arm64 x86_64; do
+    [[ " ${archs} " == *" ${arch} "* ]] || fail "${file} has architectures '${archs}', missing ${arch}"
+  done
+  echo "ok: ${file#"$app"/} (${archs})"
+done
