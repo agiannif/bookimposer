@@ -3,8 +3,8 @@
 //! page-to-form copy leaves the /Group behind, and a page group can change
 //! how transparent content blends, so it is added afterwards with lopdf.
 
-use crate::ExportError;
 use crate::layout::Layout;
+use crate::{ExportError, timing};
 use lopdf::{Document, Object, ObjectId};
 use std::collections::HashMap;
 
@@ -34,7 +34,7 @@ pub fn carry_page_groups(
     output: &mut Document,
     layout: &Layout,
 ) -> Result<Carried, ExportError> {
-    let source = match Document::load_mem(source) {
+    let source = match timing::stage("group.load_source", || Document::load_mem(source)) {
         Ok(source) => source,
         Err(error) => return Ok(Carried::SourceUnreadable(error.to_string())),
     };

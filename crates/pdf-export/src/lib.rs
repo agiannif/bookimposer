@@ -9,6 +9,7 @@ pub mod layout;
 pub mod marks;
 pub mod pdfium;
 pub mod sheets;
+pub mod timing;
 
 pub use sheets::{ExportOptions, ExportOutput, export};
 
@@ -114,7 +115,8 @@ impl PageBoxes {
 
 /// The boxes and /Rotate of every page of the PDF in `source`.
 pub fn page_sizes(pdfium: &Pdfium, source: &[u8]) -> Result<Vec<PageBoxes>, ExportError> {
-    page_boxes(&load_pdf(pdfium, source)?)
+    let document = timing::stage("page_sizes.load_pdf", || load_pdf(pdfium, source))?;
+    timing::stage("page_sizes.page_boxes", || page_boxes(&document))
 }
 
 /// The page-sizes report for `boxes`: each page's trim size as it displays

@@ -198,3 +198,19 @@ test("a CLI run with more output than the buffer allows is stopped with a 422", 
   const res = await fetch(`${url}/__dev/page-sizes`, { method: "POST", body: pdf });
   assert.equal(await errorOf(res, 422), "The exporter wrote more than 1024 bytes of output and was stopped");
 });
+
+test("with BOOKCOMPOSER_TIMINGS the stage lines go to stderr and are not export warnings", async (t) => {
+  const lines: string[] = [];
+  t.mock.method(console, "error", (line: string) => lines.push(line));
+  process.env.BOOKCOMPOSER_TIMINGS = "1";
+  t.after(() => delete process.env.BOOKCOMPOSER_TIMINGS);
+  // The CLI inherits the variable from the server's environment at the time the handler is made.
+  const timed = await serve();
+  const res = await fetch(`${timed}/__dev/export`, { method: "POST", body: exportForm(JSON.stringify(layout)) });
+  assert.equal(res.status, 200);
+  assert.deepEqual(JSON.parse(res.headers.get("x-export-warnings")!), []);
+  const stages = lines.map((line) => JSON.parse(line) as { stage: string; request: number; from?: string });
+  assert.ok(stages.some((s) => s.stage === "mw:cli" && s.from === undefined), "middleware stage");
+  assert.ok(stages.some((s) => s.stage === "export.total" && s.from === "cli"), "relayed CLI stage");
+  assert.equal(new Set(stages.map((s) => s.request)).size, 1);
+});

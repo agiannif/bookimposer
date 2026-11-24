@@ -5,6 +5,8 @@
 // Every failure answers with { error }: 422 when the CLI rejects the work, 400 for a bad request,
 // 500 (logged) for anything unexpected, 403 for a request from another origin. Errors name files
 // without the server's temp dir. The Tauri app does not use this.
+// With BOOKCOMPOSER_TIMINGS=1 each stage prints one JSON line to stderr ({"stage":"mw:cli","ms":12.3,"request":4}), and
+// the CLI's own stage lines (it prints them under the same variable) are passed on with the request's number.
 import { execFile } from "node:child_process";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { access, mkdtemp, rm, writeFile, readFile } from "node:fs/promises";
@@ -34,6 +36,34 @@ export interface ExporterOptions {
 /** JSON that is safe in an HTTP header: non-ASCII characters are escaped, so JSON.parse still restores them. */
 export function jsonHeader(value: unknown): string {
   return JSON.stringify(value).replace(/[\u0080-\uffff]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`);
+}
+
+/** Whether a stderr line is a stage line from the CLI's timing output, not a warning. */
+const isTimingLine = (line: string) => line.startsWith("{") && line.includes('"stage":');
+
+/** Times the stages of one request. Does nothing unless BOOKCOMPOSER_TIMINGS is set (and not 0). */
+class Timings {
+  static get on(): boolean {
+    return Boolean(process.env.BOOKCOMPOSER_TIMINGS) && process.env.BOOKCOMPOSER_TIMINGS !== "0";
+  }
+  static count = 0;
+  readonly request = ++Timings.count;
+  emit(stage: string, ms: number): void {
+    if (Timings.on) console.error(JSON.stringify({ stage, ms: Math.round(ms * 1000) / 1000, request: this.request }));
+  }
+  async stage<T>(stage: string, fn: () => Promise<T> | T): Promise<T> {
+    const start = performance.now();
+    try {
+      return await fn();
+    } finally {
+      this.emit(stage, performance.now() - start);
+    }
+  }
+  /** Passes on the timing lines among the CLI's stderr `lines`. */
+  relay(lines: string[]): void {
+    if (!Timings.on) return;
+    for (const line of lines.filter(isTimingLine)) console.error(JSON.stringify({ ...JSON.parse(line), request: this.request, from: "cli" }));
+  }
 }
 
 /** An answer the caller should see: 422 when the CLI or PDFium setup rejects the work, 400 for a bad request. */
@@ -83,19 +113,21 @@ export function createExporterHandler(options: ExporterOptions = {}) {
     }));
 
   /** Runs the export CLI on files in `dir`, whose path is left out of its error messages. */
-  async function cli(args: string[], dir: string): Promise<{ stdout: string; stderr: string }> {
+  async function cli(args: string[], dir: string, t: Timings): Promise<{ stdout: string; stderr: string }> {
     try {
       await access(join(pdfiumDir, pdfiumLibrary));
     } catch {
       throw new RequestError(`PDFium not found in ${pdfiumDir}. Run 'make fetch-pdfium' first.`);
     }
     try {
-      await ensureBuilt();
+      await t.stage("mw:ensure-built", ensureBuilt);
     } catch (e) {
       throw new Error(`cargo build failed: ${(e as { stderr?: string }).stderr ?? e}`);
     }
     try {
-      return await run(exportBin, args, { env, timeout: timeoutMs, maxBuffer: maxBufferBytes });
+      const result = await t.stage("mw:cli", () => run(exportBin, args, { env, timeout: timeoutMs, maxBuffer: maxBufferBytes }));
+      t.relay(result.stderr.split("\n"));
+      return result;
     } catch (e) {
       const { stderr, code, killed } = e as { stderr?: string; code?: unknown; killed?: boolean };
       if (code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER") {
@@ -106,22 +138,23 @@ export function createExporterHandler(options: ExporterOptions = {}) {
     }
   }
 
-  async function pageSizes(req: IncomingMessage, res: ServerResponse, dir: string): Promise<void> {
+  async function pageSizes(req: IncomingMessage, res: ServerResponse, dir: string, t: Timings): Promise<void> {
     const input = join(dir, "input.pdf");
-    await writeFile(input, await readBody(req));
-    const { stdout } = await cli(["page-sizes", input], dir);
+    const body = await t.stage("mw:read-body", () => readBody(req));
+    await t.stage("mw:write-input", () => writeFile(input, body));
+    const { stdout } = await cli(["page-sizes", input], dir, t);
     res.writeHead(200, { "content-type": "application/json" });
     res.end(stdout);
   }
 
-  async function exportPdf(req: IncomingMessage, res: ServerResponse, dir: string): Promise<void> {
+  async function exportPdf(req: IncomingMessage, res: ServerResponse, dir: string, t: Timings): Promise<void> {
     if (forceExportFailure) throw new RequestError("forced failure (BOOKCOMPOSER_DEV_EXPORT_FAIL)");
     const host = req.headers.host ?? "localhost";
     const headers = new Headers();
     for (const [k, v] of Object.entries(req.headers)) if (typeof v === "string") headers.set(k, v);
     let form: FormData;
     try {
-      form = await new Request(`http://${host}/`, { method: "POST", headers, body: req as never, duplex: "half" } as RequestInit).formData();
+      form = await t.stage("mw:read-multipart", () => new Request(`http://${host}/`, { method: "POST", headers, body: req as never, duplex: "half" } as RequestInit).formData());
     } catch (e) {
       throw new RequestError(`export request must be multipart/form-data: ${(e as Error).message}`, 400);
     }
@@ -130,21 +163,23 @@ export function createExporterHandler(options: ExporterOptions = {}) {
     const input = join(dir, "input.pdf");
     const layout = join(dir, "layout.json");
     const output = join(dir, "output.pdf");
-    await writeFile(input, Buffer.from(await pdf.arrayBuffer()));
+    await t.stage("mw:write-input", async () => writeFile(input, Buffer.from(await pdf.arrayBuffer())));
     const layoutText = textField(form, "layout");
     try {
       JSON.parse(layoutText);
     } catch {
       throw new RequestError("export request layout field is not valid JSON", 400);
     }
-    await writeFile(layout, layoutText);
+    await t.stage("mw:write-layout", () => writeFile(layout, layoutText));
     const args = ["export", "--layout", layout, "--input", input, "--output", output];
     if (textField(form, "cutMarks") === "true") args.push("--cut-marks");
     if (textField(form, "foldMarks") === "true") args.push("--fold-marks");
-    const { stderr } = await cli(args, dir);
-    const warnings = stderr.split("\n").filter((line) => line.trim() !== "");
+    const { stderr } = await cli(args, dir, t);
+    const warnings = stderr.split("\n").filter((line) => line.trim() !== "" && !isTimingLine(line));
+    const pdfBytes = await t.stage("mw:read-output", () => readFile(output));
     res.writeHead(200, { "content-type": "application/pdf", "x-export-warnings": jsonHeader(warnings) });
-    res.end(await readFile(output));
+    // Ends when the response has been handed to the socket.
+    await t.stage("mw:respond", () => new Promise<void>((done) => res.end(pdfBytes, done)));
   }
 
   return async (req: IncomingMessage, res: ServerResponse, next: () => void): Promise<void> => {
@@ -158,15 +193,18 @@ export function createExporterHandler(options: ExporterOptions = {}) {
       return;
     }
     let dir: string | undefined;
+    const t = new Timings();
+    const began = performance.now();
     try {
       dir = await mkdtemp(join(options.tmpRoot ?? tmpdir(), "bookcomposer-"));
-      await action(req, res, dir);
+      await action(req, res, dir, t);
     } catch (e) {
       const status = e instanceof RequestError ? e.status : 500;
       if (status === 500) console.error(`[bookcomposer-dev-exporter] ${path} failed:`, e);
       if (res.headersSent) res.destroy();
       else sendJson(res, status, { error: (e as Error).message });
     } finally {
+      t.emit(`mw:total${path.replace("/__dev/", ".")}`, performance.now() - began);
       if (dir) await rm(dir, { recursive: true, force: true });
     }
   };

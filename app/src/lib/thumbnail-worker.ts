@@ -12,11 +12,16 @@ const OPAQUE_WHITE = 0xffffffff;
 
 type Pdfium = WrappedPdfiumModule;
 
+/** Milliseconds from the worker's start until PDFium is ready, reported with the first load. */
+let startupMs = 0;
+
 async function startPdfium(): Promise<Pdfium> {
+  const began = performance.now();
   const response = await fetch(wasmUrl);
   if (!response.ok) throw new Error(`Could not fetch PDFium (HTTP ${response.status})`);
   const pdfium = await init({ wasmBinary: await response.arrayBuffer() });
   pdfium.PDFiumExt_Init();
+  startupMs = performance.now() - began;
   return pdfium;
 }
 
@@ -35,11 +40,16 @@ function closeDocument(pdfium: Pdfium): void {
   open = null;
 }
 
-function loadDocument(pdfium: Pdfium, pdf: ArrayBuffer): void {
+/** Fills in `timings.copyIn` and `timings.open`. */
+function loadDocument(pdfium: Pdfium, pdf: ArrayBuffer, timings: Record<string, number>): void {
   closeDocument(pdfium);
+  const copying = performance.now();
   const bytes = pdfium.pdfium.wasmExports.malloc(pdf.byteLength);
   heap(pdfium).set(new Uint8Array(pdf), bytes);
+  const opening = performance.now();
+  timings.copyIn = opening - copying;
   const document = pdfium.FPDF_LoadMemDocument(bytes, pdf.byteLength, "");
+  timings.open = performance.now() - opening;
   if (!document) {
     const code = pdfium.FPDF_GetLastError();
     pdfium.pdfium.wasmExports.free(bytes);
@@ -62,9 +72,11 @@ function copyPixels(pdfium: Pdfium, bitmap: number, width: number, height: numbe
 }
 
 /** Renders 0-based `pageIndex` `width` pixels wide, as the page displays. */
-async function renderPage(pdfium: Pdfium, pageIndex: number, width: number): Promise<ImageBitmap> {
+async function renderPage(pdfium: Pdfium, pageIndex: number, width: number, timings: Record<string, number>): Promise<ImageBitmap> {
   if (!open) throw new Error("No PDF is loaded");
+  const loading = performance.now();
   const page = pdfium.FPDF_LoadPage(open.document, pageIndex);
+  timings.loadPage = performance.now() - loading;
   if (!page) throw new Error(`The PDF has no page ${pageIndex + 1}`);
   let height: number;
   let pixels: Uint8ClampedArray<ArrayBuffer>;
@@ -75,16 +87,23 @@ async function renderPage(pdfium: Pdfium, pageIndex: number, width: number): Pro
     if (!bitmap) throw new Error(`PDFium could not make a ${width}x${height} bitmap`);
     try {
       pdfium.FPDFBitmap_FillRect(bitmap, 0, 0, width, height, OPAQUE_WHITE);
+      const rendering = performance.now();
       // Rotation 0 means no turn beyond the page's own /Rotate, which PDFium applies.
       pdfium.FPDF_RenderPageBitmap(bitmap, page, 0, 0, width, height, 0, FPDF_ANNOT | FPDF_REVERSE_BYTE_ORDER);
+      const copying = performance.now();
+      timings.render = copying - rendering;
       pixels = copyPixels(pdfium, bitmap, width, height);
+      timings.copyPixels = performance.now() - copying;
     } finally {
       pdfium.FPDFBitmap_Destroy(bitmap);
     }
   } finally {
     pdfium.FPDF_ClosePage(page);
   }
-  return createImageBitmap(new ImageData(pixels, width, height));
+  const making = performance.now();
+  const image = await createImageBitmap(new ImageData(pixels, width, height));
+  timings.imageBitmap = performance.now() - making;
+  return image;
 }
 
 const pdfium = startPdfium();
@@ -94,12 +113,18 @@ pdfium.catch(() => {});
 
 async function handle(request: ThumbnailRequest): Promise<void> {
   try {
+    // Stage times in ms, for the perf probe (the cache records them only when timing is on).
+    const timings: Record<string, number> = {};
     if (request.type === "load") {
-      loadDocument(await pdfium, request.pdf);
-      self.postMessage({ id: request.id } satisfies ThumbnailReply);
+      const waiting = performance.now();
+      const ready = await pdfium;
+      timings.waitForPdfium = performance.now() - waiting;
+      timings.pdfiumStartup = startupMs;
+      loadDocument(ready, request.pdf, timings);
+      self.postMessage({ id: request.id, timings } satisfies ThumbnailReply);
     } else {
-      const bitmap = await renderPage(await pdfium, request.page, request.width);
-      self.postMessage({ id: request.id, bitmap } satisfies ThumbnailReply, { transfer: [bitmap] });
+      const bitmap = await renderPage(await pdfium, request.page, request.width, timings);
+      self.postMessage({ id: request.id, bitmap, timings } satisfies ThumbnailReply, { transfer: [bitmap] });
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

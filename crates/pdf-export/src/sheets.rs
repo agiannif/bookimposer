@@ -3,7 +3,7 @@
 
 use crate::group::Carried;
 use crate::layout::{Layout, SheetSide};
-use crate::{ExportError, PageBoxes, dedupe, embed, group, load_pdf, marks, page_boxes};
+use crate::{ExportError, PageBoxes, dedupe, embed, group, load_pdf, marks, page_boxes, timing};
 use lopdf::xref::XrefEntry;
 use pdfium_render::prelude::*;
 use std::collections::BTreeSet;
@@ -33,6 +33,19 @@ pub fn export(
     layout: &Layout,
     options: &ExportOptions,
 ) -> Result<ExportOutput, ExportError> {
+    let output = timing::stage("export.total", || {
+        export_timed(pdfium, source, layout, options)
+    });
+    timing::report_totals();
+    output
+}
+
+fn export_timed(
+    pdfium: &Pdfium,
+    source: &[u8],
+    layout: &Layout,
+    options: &ExportOptions,
+) -> Result<ExportOutput, ExportError> {
     let errors: Vec<String> = layout
         .issues
         .iter()
@@ -44,8 +57,8 @@ pub fn export(
     }
 
     let source_bytes = source;
-    let source = load_pdf(pdfium, source)?;
-    let boxes = page_boxes(&source)?;
+    let source = timing::stage("export.source_load", || load_pdf(pdfium, source))?;
+    let boxes = timing::stage("export.page_boxes", || page_boxes(&source))?;
     let sides = || layout.sheets.iter().flat_map(|s| [&s.front, &s.back]);
     if let Some(pdf_page) = sides()
         .flat_map(|side| &side.placements)
@@ -63,34 +76,58 @@ pub fn export(
         .flat_map(|side| &side.placements)
         .filter_map(|placement| placement.pdf_page)
         .collect();
-    for pdf_page in placed {
-        // `export` checked every pdf_page against the page count, which
-        // PDFium keeps within i32.
-        let dropped = printed_annotations(&source.pages().get(pdf_page as i32)?);
-        if dropped > 0 {
-            warnings.push(format!(
-                "page {} has {dropped} annotation(s) or form field(s) that are not included in the output",
-                pdf_page + 1
-            ));
+    timing::stage("export.annotation_scan", || -> Result<(), ExportError> {
+        for pdf_page in placed {
+            // `export` checked every pdf_page against the page count, which
+            // PDFium keeps within i32.
+            let dropped = printed_annotations(&source.pages().get(pdf_page as i32)?);
+            if dropped > 0 {
+                warnings.push(format!(
+                    "page {} has {dropped} annotation(s) or form field(s) that are not included in the output",
+                    pdf_page + 1
+                ));
+            }
         }
-    }
+        Ok(())
+    })?;
 
     let mut sheets = pdfium.create_new_pdf()?;
-    for sheet in &layout.sheets {
-        for side in [&sheet.front, &sheet.back] {
-            let mut page = write_side(pdfium, &mut sheets, &source, &boxes, layout, side)?;
-            marks::draw_marks(
-                &sheets,
-                &mut page,
-                &side.marks,
-                &layout.mark_style,
-                &layout.sheet,
-                options.cut_marks,
-                options.fold_marks,
-            )?;
+    timing::stage("export.embed", || -> Result<(), ExportError> {
+        for (index, sheet) in layout.sheets.iter().enumerate() {
+            for (side_number, side) in [&sheet.front, &sheet.back].into_iter().enumerate() {
+                let fields = [
+                    ("sheet", index),
+                    ("back", side_number),
+                    ("placements", side.placements.len()),
+                ];
+                timing::stage_with(
+                    "export.embed_side",
+                    &fields,
+                    || -> Result<(), ExportError> {
+                        let mut page =
+                            write_side(pdfium, &mut sheets, &source, &boxes, layout, side)?;
+                        timing::accumulate("export.marks", || {
+                            marks::draw_marks(
+                                &sheets,
+                                &mut page,
+                                &side.marks,
+                                &layout.mark_style,
+                                &layout.sheet,
+                                options.cut_marks,
+                                options.fold_marks,
+                            )
+                        })?;
+                        Ok(())
+                    },
+                )?;
+            }
         }
-    }
-    let pdf = rewrite(source_bytes, sheets.save_to_bytes()?, layout, &mut warnings)?;
+        Ok(())
+    })?;
+    let saved = timing::stage("export.pdfium_save", || sheets.save_to_bytes())?;
+    let pdf = timing::stage("export.rewrite", || {
+        rewrite(source_bytes, saved, layout, &mut warnings)
+    })?;
     Ok(ExportOutput { pdf, warnings })
 }
 
@@ -111,9 +148,11 @@ fn rewrite(
         strict: true,
         ..Default::default()
     };
-    let mut output =
-        lopdf::Document::load_mem_with_options(&pdf, strict).map_err(|e| rewrite_error(&e))?;
-    let missing = missing_objects(&output);
+    let mut output = timing::stage("rewrite.lopdf_load", || {
+        lopdf::Document::load_mem_with_options(&pdf, strict)
+    })
+    .map_err(|e| rewrite_error(&e))?;
+    let missing = timing::stage("rewrite.missing_objects", || missing_objects(&output));
     if !missing.is_empty() {
         return Err(ExportError::Rewrite(format!(
             "objects {missing:?} of PDFium's output did not load"
@@ -121,19 +160,24 @@ fn rewrite(
     }
     // A source lopdf cannot read skips the groups rather than failing an
     // export PDFium managed.
-    let carried = group::carry_page_groups(source, &mut output, layout)?;
+    let carried = timing::stage("rewrite.carry_groups", || {
+        group::carry_page_groups(source, &mut output, layout)
+    })?;
     if let Carried::SourceUnreadable(error) = &carried {
         warnings.push(format!(
             "could not read the source's page transparency groups ({error}); \
              pages are placed without them"
         ));
     }
-    let removed = dedupe::share_identical_objects(&mut output);
+    let removed = timing::stage("rewrite.dedupe", || {
+        dedupe::share_identical_objects(&mut output)
+    });
     if carried != Carried::Added && removed == 0 {
         return Ok(pdf);
     }
     let mut bytes = Vec::new();
-    output.save_to(&mut bytes).map_err(|e| rewrite_error(&e))?;
+    timing::stage("rewrite.lopdf_save", || output.save_to(&mut bytes))
+        .map_err(|e| rewrite_error(&e))?;
     Ok(bytes)
 }
 

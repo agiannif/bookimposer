@@ -8,6 +8,7 @@
 //! never decoded or re-encoded. Merging an object only rewrites the
 //! references to it, so every page draws exactly the bytes it drew before.
 
+use crate::timing;
 use lopdf::{Dictionary, Document, Object, ObjectId};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::hash::{DefaultHasher, Hash, Hasher};
@@ -22,23 +23,25 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 /// have. Pages, the page tree, the catalog and whatever the trailer points to
 /// are never merged: their identity matters.
 pub fn share_identical_objects(doc: &mut Document) -> usize {
-    let protected = protected_objects(doc);
+    let protected = timing::stage("dedupe.protected", || protected_objects(doc));
     let mut removed = 0;
-    loop {
-        let merged = duplicates(doc, &protected);
-        if merged.is_empty() {
-            break;
+    timing::stage("dedupe.merge", || {
+        loop {
+            let merged = duplicates(doc, &protected);
+            if merged.is_empty() {
+                break;
+            }
+            for id in merged.keys() {
+                doc.objects.remove(id);
+            }
+            removed += merged.len();
+            for object in doc.objects.values_mut() {
+                redirect(object, &merged);
+            }
+            redirect_dict(&mut doc.trailer, &merged);
         }
-        for id in merged.keys() {
-            doc.objects.remove(id);
-        }
-        removed += merged.len();
-        for object in doc.objects.values_mut() {
-            redirect(object, &merged);
-        }
-        redirect_dict(&mut doc.trailer, &merged);
-    }
-    removed + doc.prune_objects().len()
+    });
+    removed + timing::stage("dedupe.prune", || doc.prune_objects().len())
 }
 
 /// The objects whose identity matters: what the trailer references (the

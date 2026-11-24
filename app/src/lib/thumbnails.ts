@@ -1,13 +1,15 @@
 // Page thumbnails rendered by the PDFium worker (thumbnail-worker.ts), with an
 // LRU cache in front of it.
 
+import { record, recordDuration } from "./perf.ts";
+
 /** Messages the cache posts to the worker. `page` is the 0-based PDF page. */
 export type ThumbnailRequest =
   | { type: "load"; id: number; pdf: ArrayBuffer }
   | { type: "render"; id: number; page: number; width: number };
 
-/** The worker's answer to the request with the same `id`. A load reply has no bitmap. */
-export type ThumbnailReply = { id: number; bitmap?: ImageBitmap } | { id: number; error: string };
+/** The worker's answer to the request with the same `id`. A load reply has no bitmap. `timings` are stage times in ms. */
+export type ThumbnailReply = { id: number; bitmap?: ImageBitmap; timings?: Record<string, number> } | { id: number; error: string };
 
 /** The part of a `Worker` the cache uses, so tests can stand in for it. */
 export interface ThumbnailWorker {
@@ -117,7 +119,9 @@ export class ThumbnailCache {
   #inFlight: { id: number; job: Job } | null = null;
   /** The newest job for each page, queued or in flight. */
   #newest = new Map<number, Job>();
-  #loads = new Map<number, { resolve(): void; reject(error: unknown): void }>();
+  #loads = new Map<number, { resolve(): void; reject(error: unknown): void; posted: number }>();
+  /** When each in-flight render was posted, for the perf probe. */
+  #renderPosted = new Map<number, number>();
   #nextId = 0;
 
   constructor(worker: ThumbnailWorker, maxBytes = DEFAULT_MAX_BYTES, maxWidth = MAX_WIDTH) {
@@ -145,7 +149,7 @@ export class ThumbnailCache {
     const id = this.#nextId++;
     this.#worker.postMessage({ type: "load", id, pdf });
     return new Promise((resolve, reject) => {
-      this.#loads.set(id, { resolve, reject });
+      this.#loads.set(id, { resolve, reject, posted: performance.now() });
     });
   }
 
@@ -209,7 +213,11 @@ export class ThumbnailCache {
       if ("error" in reply) {
         this.#fail(reply.error);
         load.reject(this.#dead);
-      } else load.resolve();
+      } else {
+        record("thumb.load", load.posted, { maxWidth: this.#maxWidth });
+        for (const [stage, ms] of Object.entries(reply.timings ?? {})) recordDuration(`thumb.load.${stage}`, ms, { maxWidth: this.#maxWidth });
+        load.resolve();
+      }
       return;
     }
     if (this.#inFlight?.id !== reply.id) {
@@ -219,6 +227,11 @@ export class ThumbnailCache {
     }
     const { job } = this.#inFlight;
     this.#inFlight = null;
+    record("thumb.render", this.#renderPosted.get(reply.id) ?? performance.now(), { maxWidth: this.#maxWidth, page: job.page, width: job.width });
+    this.#renderPosted.delete(reply.id);
+    if (!("error" in reply)) {
+      for (const [stage, ms] of Object.entries(reply.timings ?? {})) recordDuration(`thumb.render.${stage}`, ms, { maxWidth: this.#maxWidth });
+    }
     if ("error" in reply || !reply.bitmap) {
       this.#rejectAll(job, new Error("error" in reply ? reply.error : "The worker sent no image"));
     } else {
@@ -270,6 +283,7 @@ export class ThumbnailCache {
     if (!job) return;
     const id = this.#nextId++;
     this.#inFlight = { id, job };
+    this.#renderPosted.set(id, performance.now());
     this.#worker.postMessage({ type: "render", id, page: job.page, width: job.width });
   }
 }

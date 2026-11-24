@@ -6,6 +6,7 @@ import type { AssembledBook, BookFace } from "../../../assembler/assemble.ts";
 import type { PageBoxes } from "./backend.ts";
 import { exportedPage, paintExportedSide, paintLayoutSide, textureSize } from "./sheet-textures.ts";
 import type { ThumbnailCache } from "./thumbnails.ts";
+import { timed } from "./perf.ts";
 import { facesMatch } from "./verify.ts";
 
 /** The long side of the images faces are compared at, in pixels. */
@@ -51,17 +52,20 @@ export async function verifyExport(
     const sheet = Number(sheetText);
     const printed = canvasFor(size);
     const exportedCtx = canvasFor(size);
-    await paintLayoutSide(printed, layout.sheets[sheet]![side as "front" | "back"], boxes, preview, size.scale);
-    await paintExportedSide(exportedCtx, exported, exportedPage(sheet, side as "front" | "back"));
+    await timed("verify.paint-layout", () => paintLayoutSide(printed, layout.sheets[sheet]![side as "front" | "back"], boxes, preview, size.scale));
+    await timed("verify.paint-exported", () => paintExportedSide(exportedCtx, exported, exportedPage(sheet, side as "front" | "back")));
     perturb?.(exportedCtx, { sheet, side: side as "front" | "back", scale: size.scale });
-    for (const face of faces) {
-      const x = Math.round(face.region.x * size.scale);
-      const y = Math.round(face.region.y * size.scale);
-      const w = Math.max(1, Math.round(face.region.width * size.scale));
-      const h = Math.max(1, Math.round(face.region.height * size.scale));
-      checked++;
-      if (!facesMatch(printed.getImageData(x, y, w, h), exportedCtx.getImageData(x, y, w, h))) differing.add(face.page!);
-    }
+    const compare = () => {
+      for (const face of faces) {
+        const x = Math.round(face.region.x * size.scale);
+        const y = Math.round(face.region.y * size.scale);
+        const w = Math.max(1, Math.round(face.region.width * size.scale));
+        const h = Math.max(1, Math.round(face.region.height * size.scale));
+        checked++;
+        if (!facesMatch(printed.getImageData(x, y, w, h), exportedCtx.getImageData(x, y, w, h))) differing.add(face.page!);
+      }
+    };
+    await timed("verify.compare", compare);
   }
   return { checked, differing: [...differing].sort((a, b) => a - b) };
 }

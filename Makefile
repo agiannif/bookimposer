@@ -10,7 +10,7 @@ export PLAYWRIGHT_BROWSERS_PATH := $(CURDIR)/app/.playwright-browsers
 PDFIUM_LIB := $(if $(filter Darwin,$(shell uname -s)),libpdfium.dylib,libpdfium.so)
 
 .DEFAULT_GOAL := help
-.PHONY: help layout-fixtures fetch-pdfium test test-engine test-export e2e typecheck lint fmt build release require-pdfium app-dev app-test app-check app-e2e app-browsers app-fixtures app-screenshots app-book-screenshots export-size-probe tauri-check tauri-test ipc-fixtures
+.PHONY: help layout-fixtures fetch-pdfium test test-engine test-export e2e typecheck lint fmt build release require-pdfium app-dev app-test app-check app-e2e app-browsers app-fixtures app-screenshots app-book-screenshots export-size-probe perf-probe tauri-check tauri-test ipc-fixtures
 
 help: ## List targets
 	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "} {printf "  %-16s %s\n", $$1, $$2}'
@@ -111,3 +111,7 @@ release: ## Build the release export binary
 
 require-pdfium:
 	@test -f "$(BOOKCOMPOSER_PDFIUM_DIR)/$(PDFIUM_LIB)" || { echo "PDFium not found in $(BOOKCOMPOSER_PDFIUM_DIR). Run 'make fetch-pdfium' first." >&2; exit 1; }
+
+perf-probe: require-pdfium ## Time each import/export stage (app, dev server, Rust) into OUT=dir (default target/perf); PDF=file RUNS=3 PORT=5199; usage: node app/scripts/perf-probe.ts --help
+	cargo build --quiet --release -p pdf-export
+	cd app && node scripts/perf-probe.ts --out $(abspath $(or $(OUT),target/perf)) $(if $(PDF),--pdf $(abspath $(PDF))) --runs $(or $(RUNS),3) --port $(or $(PORT),5199)

@@ -3,6 +3,7 @@
 import { issuesForMarks, type Layout, type Size } from "../../../engine/src/index.ts";
 import { DEFAULT_SETTINGS, suggestSignatures, toBookSpec, type BookSettings } from "./book.ts";
 import { sha256Hex } from "./hash.ts";
+import { timed, timedSync } from "./perf.ts";
 import { bleedWarnings, imposeSafely, type AppIssue } from "./issues.ts";
 import { loadUnit, saveUnit, type Unit } from "./units.ts";
 import type { PageBoxes, PdfBackend } from "./backend.ts";
@@ -20,7 +21,7 @@ export class BookWorkspace {
   settings = $state<BookSettings>(structuredClone(DEFAULT_SETTINGS));
   /** The unit lengths are shown in; settings stay in points. */
   unit = $state<Unit>(loadUnit());
-  #imposed = $derived(this.pdf ? imposeSafely(toBookSpec(this.pdf.pageSizes, $state.snapshot(this.settings))) : null);
+  #imposed = $derived(this.pdf ? timedSync("impose", () => imposeSafely(toBookSpec(this.pdf!.pageSizes, $state.snapshot(this.settings)))) : null);
   layout: Layout | null = $derived(this.#imposed?.layout ?? null);
   /** The engine's issues and the app's own; any error disables export. */
   issues: AppIssue[] = $derived(
@@ -47,14 +48,14 @@ export class BookWorkspace {
    * signatures. Warnings are for the person opening a project.
    */
   async open(file: File, backend: PdfBackend, saved?: BookSettings, warnings: (pdf: { sha256: string; pageCount: number }) => string[] = () => []): Promise<void> {
-    const bytes = await file.arrayBuffer();
-    const { pageSizes, boxes } = await backend.pageSizes(bytes);
+    const bytes = await timed("open.read-file", () => file.arrayBuffer(), { bytes: file.size });
+    const { pageSizes, boxes } = await timed("open.page-sizes", () => backend.pageSizes(bytes));
     let settings = saved;
     if (!settings) {
       settings = structuredClone(DEFAULT_SETTINGS);
       settings.signatures = suggestSignatures(pageSizes.length, settings);
     }
-    this.warnings = warnings({ sha256: await sha256Hex(bytes), pageCount: pageSizes.length });
+    this.warnings = warnings({ sha256: await timed("open.sha256", () => sha256Hex(bytes)), pageCount: pageSizes.length });
     this.settings = settings;
     this.pdf = { name: file.name, bytes, pageSizes, boxes };
   }

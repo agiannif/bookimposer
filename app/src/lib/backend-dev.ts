@@ -2,6 +2,7 @@
 // and a hidden file input.
 import type { Layout, Size } from "../../../engine/src/index.ts";
 import type { PageBoxes, PdfBackend } from "./backend.ts";
+import { timed } from "./perf.ts";
 
 async function checked(res: Response): Promise<Response> {
   if (res.ok) return res;
@@ -26,22 +27,25 @@ function download(blob: Blob, name: string): void {
 
 export class DevBackend implements PdfBackend {
   async pageSizes(pdf: ArrayBuffer): Promise<{ pageSizes: Size[]; boxes: PageBoxes[] }> {
-    const res = await checked(await fetch("/__dev/page-sizes", { method: "POST", body: pdf }));
-    return res.json();
+    const res = await timed("page-sizes.fetch", async () => checked(await fetch("/__dev/page-sizes", { method: "POST", body: pdf })));
+    return timed("page-sizes.json", () => res.json());
   }
 
   async exportPdf(pdf: ArrayBuffer, layout: Layout, marks: { cut: boolean; fold: boolean }): Promise<{ pdf: ArrayBuffer; warnings: string[] }> {
-    const form = new FormData();
-    form.set("pdf", new Blob([pdf], { type: "application/pdf" }), "book.pdf");
-    form.set("layout", JSON.stringify(layout));
-    form.set("cutMarks", String(marks.cut));
-    form.set("foldMarks", String(marks.fold));
-    const res = await checked(await fetch("/__dev/export", { method: "POST", body: form }));
-    return { pdf: await res.arrayBuffer(), warnings: JSON.parse(res.headers.get("X-Export-Warnings") ?? "[]") };
+    const form = await timed("export.build-form", () => {
+      const form = new FormData();
+      form.set("pdf", new Blob([pdf], { type: "application/pdf" }), "book.pdf");
+      form.set("layout", JSON.stringify(layout));
+      form.set("cutMarks", String(marks.cut));
+      form.set("foldMarks", String(marks.fold));
+      return form;
+    });
+    const res = await timed("export.fetch", async () => checked(await fetch("/__dev/export", { method: "POST", body: form })));
+    return { pdf: await timed("export.read-body", () => res.arrayBuffer()), warnings: JSON.parse(res.headers.get("X-Export-Warnings") ?? "[]") };
   }
 
   async savePdf(bytes: ArrayBuffer, suggestedName: string): Promise<void> {
-    download(new Blob([bytes], { type: "application/pdf" }), suggestedName);
+    await timed("export.save", () => download(new Blob([bytes], { type: "application/pdf" }), suggestedName));
   }
 
   async saveProject(text: string, suggestedName: string): Promise<void> {

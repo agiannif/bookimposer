@@ -14,6 +14,7 @@
   import { BookModel } from "../lib/book-scene.ts";
   import { exportedPage, paintExportedSide, paintLayoutSide, textureSize, TEXTURE_LONG_SIDE } from "../lib/sheet-textures.ts";
   import { SideTextures } from "../lib/side-textures.ts";
+  import { timed } from "../lib/perf.ts";
   import { verifyExport, type PerturbExport, type Verdict } from "../lib/verify-export.ts";
   import { ThumbnailCache, previewFailure, startThumbnailWorker } from "../lib/thumbnails.ts";
   import BookScene from "./BookScene.svelte";
@@ -93,14 +94,14 @@
     phase = "exporting";
     verifyError = null;
     try {
-      const result = await backend.exportPdf(pdf, $state.snapshot(at), { cut: false, fold: false });
+      const result = await timed("verify.export", () => backend.exportPdf(pdf, $state.snapshot(at), { cut: false, fold: false }));
       if (!exportedPdf) {
         exportWorker = startThumbnailWorker();
         exportedPdf = new ThumbnailCache(exportWorker, undefined, TEXTURE_LONG_SIDE);
       }
-      await exportedPdf.load(result.pdf);
+      await timed("verify.load-exported", () => exportedPdf!.load(result.pdf));
       phase = "checking";
-      const found = await verifyExport($state.snapshot(checked) as Layout, assemble(checked), boxes, pages, exportedPdf, perturbExport);
+      const found = await timed("verify.check", () => verifyExport($state.snapshot(checked) as Layout, assemble(checked), boxes, pages, exportedPdf!, perturbExport));
       verified = { layout: at, verdict: found };
     } catch (e) {
       if (previewFailure(e) !== "cancelled") verifyError = `Could not verify the export: ${e instanceof Error ? e.message : String(e)}`;

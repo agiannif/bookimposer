@@ -3,7 +3,7 @@
 
 use crate::geometry::{PdfBox, displayed_box, placement_matrix, to_pdf_rect};
 use crate::layout::{PagePlacement, Size};
-use crate::{ExportError, page_rotation};
+use crate::{ExportError, page_rotation, timing};
 use pdfium_render::prelude::*;
 
 /// Draws `source_page` onto `sheet_page` so its `trim` box fills
@@ -27,15 +27,39 @@ pub fn place<'a>(
     sheet: &Size,
     trim: &PdfBox,
 ) -> Result<(), ExportError> {
+    timing::accumulate("embed.place", || {
+        place_page(
+            pdfium,
+            sheet_doc,
+            sheet_page,
+            source_page,
+            placement,
+            sheet,
+            trim,
+        )
+    })
+}
+
+fn place_page<'a>(
+    pdfium: &'a Pdfium,
+    sheet_doc: &mut PdfDocument<'a>,
+    sheet_page: &mut PdfPage<'a>,
+    source_page: &mut PdfPage<'a>,
+    placement: &PagePlacement,
+    sheet: &Size,
+    trim: &PdfBox,
+) -> Result<(), ExportError> {
     let clip = to_pdf_rect(&placement.clip, sheet);
     let content = to_pdf_rect(&placement.content, sheet);
 
-    let mut scratch = pdfium.create_new_pdf()?;
+    let mut scratch = timing::accumulate("embed.create_scratch", || pdfium.create_new_pdf())?;
     // `objects_mut` only because `objects` ties the copy's lifetime to this
     // borrow of the page; nothing on the page is modified.
-    let mut page_xobject = source_page
-        .objects_mut()
-        .copy_into_x_object_form_object(&mut scratch)?;
+    let mut page_xobject = timing::accumulate("embed.copy_page_to_scratch", || {
+        source_page
+            .objects_mut()
+            .copy_into_x_object_form_object(&mut scratch)
+    })?;
     // PDFium's copy already shows the page as it displays (see
     // `displayed_box`), so the trim is fitted in that space.
     let page_box: PdfBox = source_page.boundaries().bounding()?.bounds.into();
@@ -51,9 +75,11 @@ pub fn place<'a>(
         ))?;
     clip_page.objects_mut().add_object(page_xobject)?;
 
-    let mut clipped = clip_page
-        .objects_mut()
-        .copy_into_x_object_form_object(sheet_doc)?;
+    let mut clipped = timing::accumulate("embed.copy_clip_page_to_sheet", || {
+        clip_page
+            .objects_mut()
+            .copy_into_x_object_form_object(sheet_doc)
+    })?;
     clipped.translate(PdfPoints::new(clip.left), PdfPoints::new(clip.bottom))?;
     sheet_page.objects_mut().add_object(clipped)?;
     Ok(())

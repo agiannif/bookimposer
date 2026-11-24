@@ -2,6 +2,7 @@
 import { CanvasTexture, SRGBColorSpace } from "three";
 import type { FaceSource } from "../../../assembler/assemble.ts";
 import { sideKey } from "./book-model.ts";
+import { timed } from "./perf.ts";
 
 type Side = Pick<FaceSource, "sheet" | "side">;
 
@@ -63,7 +64,7 @@ export class SideTextures {
         texture.needsUpdate = true;
         this.#onChange();
       };
-      this.#paint(canvas.getContext("2d")!, side).then(done, (error) => {
+      timed("texture.paint", () => this.#paint(canvas.getContext("2d")!, side), { sheet: side.sheet, side: side.side }).then(done, (error) => {
         done();
         if (!this.#disposed) this.#onError(error);
       });
